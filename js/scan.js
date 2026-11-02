@@ -1,5 +1,40 @@
 // Foto-Scanner (Texterkennung läuft auf dem Gerät) und Foto-Prüfung.
-import { searchCards, findByNumber } from './cards.js';
+import { searchCards, findByNumber, getCard } from './cards.js';
+import { fingerprint, nearest } from './fingerprint.js';
+
+export const VISUAL_SURE = 46; // Abstand im Bild-Index, bis zu dem ein Treffer als sicher gilt (Nicht-Karten liegen ab etwa 51)
+
+let indexPromise = null;
+export function loadIndex() {
+  indexPromise = indexPromise || Promise.all([
+    fetch('index/pokemon.bin').then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); }),
+    fetch('index/pokemon.txt').then(r => { if (!r.ok) throw new Error(); return r.text(); }),
+  ]).then(([bin, text]) => ({ hashes: new Uint32Array(bin), ids: text.split('\n') }))
+    .catch(() => { indexPromise = null; return null; });
+  return indexPromise;
+}
+
+// Sucht die Karte nur anhand ihres Aussehens, unabhängig von Sprache und Text.
+export async function visualSearch(source, x, y, w, h, limit = 10) {
+  const idx = await loadIndex();
+  if (!idx) return [];
+  const queries = [[0, 0, 1], [0, 0, .95], [.02, 0, .96], [-.02, 0, .96], [0, .02, .96], [0, -.02, .96]].map(([dx, dy, s]) => {
+    const sw = w * s, sh = h * s;
+    return fingerprint(source, x + (w - sw) / 2 + w * dx, y + (h - sh) / 2 + h * dy, sw, sh);
+  });
+  return nearest(idx.hashes, queries, limit).map(r => ({ key: idx.ids[r.i], d: r.d }));
+}
+
+// Lädt die Karte zu einem Index-Treffer, wenn möglich auf Deutsch.
+export async function cardFromKey(key) {
+  const [lang, ...rest] = key.split(':');
+  const id = rest.join(':');
+  if (lang === 'en') {
+    const de = await getCard('pokemon', 'de:' + id).catch(() => null);
+    if (de) return de;
+  }
+  return getCard('pokemon', key).catch(() => null);
+}
 
 const TESSERACT = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 const SURE_DISTANCE = 21; // bis hierhin gilt ein Treffer als sicher erkannt
@@ -200,6 +235,25 @@ function band(crop, top, height) {
 
 // Erkennt die Karte auf einem Foto. sure sagt, ob das Kartenbild wirklich zum Foto passt.
 export async function identify(blob, game, onStep = () => {}) {
+  // Zuerst über das Aussehen suchen, das dauert nur einen Moment.
+  let visual = [];
+  if (game === 'pokemon') {
+    onStep('Karte wird erkannt …');
+    const pic = await createImageBitmap(blob);
+    const a = cropCard(pic, pic.width, pic.height);
+    const b = cropCard(a, a.width, a.height);
+    const cardLikeCut = [b, a].find(c => c.width / c.height > .62 && c.width / c.height < .8);
+    const hits = await visualSearch(cardLikeCut || pic, 0, 0, cardLikeCut ? cardLikeCut.width : pic.width, cardLikeCut ? cardLikeCut.height : pic.height);
+    pic.close();
+    visual = hits;
+    if (hits.length && hits[0].d <= VISUAL_SURE) {
+      const near = hits.filter(h => h.d <= hits[0].d + 10).slice(0, 8);
+      const cards = (await Promise.all(near.map(h => cardFromKey(h.key)))).filter(Boolean);
+      const seen = new Set();
+      const unique = cards.filter(c => !seen.has(c.id) && seen.add(c.id));
+      if (unique.length) return { cards: unique, sure: true, best: hits[0].d, text: '' };
+    }
+  }
   if (!window.Tesseract) {
     onStep('Wird vorbereitet …');
     await loadScript(TESSERACT);
@@ -228,7 +282,7 @@ export async function identify(blob, game, onStep = () => {}) {
   zx.drawImage(cut, 0, 0, crop.width, crop.height);
 
   const { data } = await window.Tesseract.recognize(crop, 'deu+eng');
-  let found = [];
+  let found = (await Promise.all(visual.slice(0, 6).map(h => cardFromKey(h.key)))).filter(Boolean);
   const bottom = await window.Tesseract.recognize(band(crop, .88, .12), 'eng');
   const parsed = parseText(data.text || '');
   const num = parseText(bottom.data.text || '').number ? parseText(bottom.data.text || '') : parsed;

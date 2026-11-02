@@ -114,7 +114,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--green); out
 .preview { width: 100%; max-height: 190px; object-fit: contain; display: block; }
 .scanning .preview { opacity: .55; }
 .scanning::after { content: ""; position: absolute; left: 0; right: 0; height: 2px; background: var(--chart); box-shadow: 0 0 14px 3px var(--chart); animation: scanline 1.3s ease-in-out infinite alternate; }
-@keyframes scanline { from { top: 4%; } to { top: 96%; } }
+@keyframes scanline { from { top: 5%; } to { top: 95%; } }
 #scanstep { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 12.5px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px #000; z-index: 1; }
 .note { margin: 0 0 10px; font-size: 13px; color: var(--sub); }
 .note.ok { color: var(--green); font-weight: 700; }
@@ -195,3 +195,108 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--green); out
 .game.on { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--chart); }
 #toast { position: fixed; bottom: 74px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; border-radius: 8px; padding: 8px 13px; z-index: 9; width: max-content; max-width: 90vw; font-size: 13px; }
 .empty { padding: 24px 12px; text-align: center; color: var(--sub); }
+
+/* Bilder blenden weich ein */
+#view img, #modal img { opacity: 0; transition: opacity .28s ease; }
+#view img.ok, #modal img.ok { opacity: 1; }
+
+/* Gestaffelter Einstieg */
+.enter .stag > *, .enter .rows > .item { animation: rise-in .42s cubic-bezier(.2,.8,.25,1) backwards; }
+.stag > *:nth-child(2) { animation-delay: .05s; } .stag > *:nth-child(3) { animation-delay: .1s; }
+.stag > *:nth-child(4) { animation-delay: .15s; } .stag > *:nth-child(5) { animation-delay: .2s; }
+.stag > *:nth-child(6) { animation-delay: .25s; } .stag > *:nth-child(n+7) { animation-delay: .3s; }
+@keyframes rise-in { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+.pop { animation: pop .42s cubic-bezier(.2,1.5,.4,1) backwards; }
+@keyframes pop { from { opacity: 0; transform: scale(.9); } }
+
+/* Scan-Kachel */
+.scancta { display: flex; align-items: center; gap: 15px; width: 100%; border: 0; border-radius: 10px; background: var(--ink); color: #fff; padding: 13px 15px; margin-top: 14px; text-align: left; overflow: hidden; }
+.scancta b { display: block; font-size: 17px; font-weight: 900; }
+.scancta > span:last-child > span { display: block; font-size: 12.5px; color: #aab3b0; margin-top: 2px; line-height: 1.3; }
+.viewfinder { position: relative; flex: none; width: 58px; height: 76px; }
+.viewfinder i, .frame i { position: absolute; width: 14px; height: 14px; border: 3px solid var(--chart); }
+.viewfinder i { width: 11px; height: 11px; border-width: 2.5px; }
+.viewfinder i:nth-child(1), .frame i:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; border-top-left-radius: 5px; }
+.viewfinder i:nth-child(2), .frame i:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; border-top-right-radius: 5px; }
+.viewfinder i:nth-child(3), .frame i:nth-child(3) { left: 0; bottom: 0; border-right: 0; border-top: 0; border-bottom-left-radius: 5px; }
+.viewfinder i:nth-child(4), .frame i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 5px; }
+.minicard { position: absolute; inset: 9px 10px; background: linear-gradient(135deg, #2b3a35, #47605a); border-radius: 3px; }
+.beam { position: absolute; left: 3px; right: 3px; height: 2px; background: var(--chart); box-shadow: 0 0 10px 2px var(--chart); animation: scanline 1.5s ease-in-out infinite alternate; z-index: 1; }
+.quick { display: flex; gap: 6px; overflow-x: auto; margin: 12px -14px 0; padding: 0 14px; scrollbar-width: none; }
+.quick button { flex: none; background: var(--soft); border: 0; border-radius: 15px; padding: 6px 13px; font-size: 13px; font-weight: 700; }
+.settile { flex: none; width: 126px; height: 70px; background: var(--soft); border: 0; border-radius: 6px; padding: 8px; display: grid; place-items: center; }
+.settile img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.marketoff { margin: 14px 0 0; padding: 10px 12px; background: var(--soft); border-radius: 8px; font-size: 13px; color: var(--sub); }
+.marketoff b { color: var(--text); }
+.prod.ghost { pointer-events: none; }
+.skeleton.tall { height: 156px; margin-bottom: 6px; }
+.skeleton.line { height: 12px; width: 70%; }
+.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stats { grid-template-columns: 1fr 1fr 1fr; }
+.stat b { font-size: 16px; }
+
+/* Leiste mit gleitendem Strich */
+#navbar { position: absolute; left: 0; top: -1px; width: 28px; height: 2px; background: var(--ink); border-radius: 2px; transition: transform .28s cubic-bezier(.3,1.3,.5,1); }
+#nav button { transition: color .15s; }
+#nav button.bump svg { animation: navbump .45s cubic-bezier(.2,1.8,.4,1); }
+@keyframes navbump { 40% { transform: scale(1.45) translateY(-3px); } }
+
+/* Karte mit Holo-Glanz */
+.holo { position: relative; width: 56%; max-width: 220px; margin: 0 auto 12px; transform: perspective(700px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform .35s cubic-bezier(.2,.8,.3,1); touch-action: pan-y; animation: cardin .55s cubic-bezier(.2,1.2,.4,1) backwards; filter: drop-shadow(0 12px 16px rgba(13,19,17,.25)); }
+.holo.active { transition: transform .06s linear; }
+.holo .cardimg { width: 100%; max-width: none; margin: 0; display: block; }
+.gloss { position: absolute; inset: 0; border-radius: 6px; pointer-events: none; opacity: 0; transition: opacity .25s; mix-blend-mode: color-dodge; background: radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), rgba(255,255,255,.75), rgba(120,220,255,.28) 26%, rgba(255,120,220,.16) 46%, transparent 68%); }
+.holo.active .gloss { opacity: 1; }
+@keyframes cardin { from { opacity: 0; transform: perspective(700px) rotateY(-55deg) translateY(16px) scale(.88); } }
+
+/* Hinzufügen */
+.flyer { position: fixed; z-index: 60; border-radius: 4px; pointer-events: none; object-fit: cover; margin: 0 !important; opacity: 1 !important; }
+.spark { position: fixed; z-index: 59; width: 7px; height: 7px; border-radius: 50%; background: var(--chart); pointer-events: none; }
+.spark:nth-of-type(3n) { background: #ffd34d; }
+.gainfloat { position: fixed; z-index: 61; transform: translateX(-50%); font-size: 21px; font-weight: 900; color: var(--chart); text-shadow: 0 2px 7px rgba(0,0,0,.45); pointer-events: none; animation: gain 1s ease-out forwards; }
+@keyframes gain { from { opacity: 0; margin-top: 12px; } 25% { opacity: 1; } to { opacity: 0; margin-top: -60px; } }
+
+/* Live-Scanner */
+body.noscroll { overflow: hidden; }
+#live { position: fixed; inset: 0; z-index: 40; background: #000; color: #fff; overflow: hidden; animation: fade .18s ease-out; }
+#live video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.frame { position: absolute; left: 50%; top: 45%; width: min(74vw, 54vh, 340px); aspect-ratio: 5/7; transform: translate(-50%, -50%); border-radius: 10px; box-shadow: 0 0 0 200vmax rgba(0,0,0,.58); transition: transform .25s cubic-bezier(.2,1.5,.4,1); }
+.frame i { width: 30px; height: 30px; border-width: 4px; border-color: #fff; transition: border-color .15s; animation: breathe 1.8s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .55; } }
+.frame .beam { left: 6px; right: 6px; }
+.frame.locked { transform: translate(-50%, -50%) scale(1.04); }
+.frame.locked i { border-color: var(--chart); animation: none; }
+.frame.locked .beam { display: none; }
+.livetop { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; justify-content: space-between; padding: max(12px, env(safe-area-inset-top)) 14px 12px; }
+.liveicon { width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(0,0,0,.5); color: #fff; font-size: 24px; line-height: 1; }
+.liveicon[data-live="torch"] { font-size: 17px; }
+.liveicon.on { background: #ffd34d; color: #000; }
+.livecount { background: var(--chart); color: #04261b; padding: 6px 12px; border-radius: 16px; font-size: 13px; font-weight: 900; }
+.livecount.bump { animation: pop .4s cubic-bezier(.2,1.6,.4,1); }
+.hint { position: absolute; left: 16px; right: 16px; top: calc(45% + min(52vw, 37.800vh, 238px) + 14px); margin: 0; text-align: center; font-weight: 700; font-size: 15px; text-shadow: 0 1px 4px #000; }
+.liveactions { position: absolute; left: 0; right: 0; bottom: max(20px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 22px; }
+.livelink { background: none; border: 0; color: #fff; font-weight: 700; font-size: 14px; justify-self: start; padding: 8px 0; }
+.livegame { justify-self: end; font-size: 13px; font-weight: 700; opacity: .8; }
+.shutter { width: 68px; height: 68px; border-radius: 50%; border: 4px solid #fff; background: rgba(255,255,255,.28); padding: 0; }
+.shutter:active { background: #fff; }
+.flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.flash.go { animation: flash .34s ease-out; }
+@keyframes flash { 0% { opacity: .85; } 100% { opacity: 0; } }
+.livehit { position: absolute; left: 10px; right: 10px; bottom: 10px; display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 12px; border-radius: 14px; background: #fff; color: var(--text); box-shadow: 0 10px 34px rgba(0,0,0,.45); }
+.livehit[hidden] { display: none; }
+.livehit.in { animation: hitin .46s cubic-bezier(.2,1.25,.35,1); }
+@keyframes hitin { from { transform: translateY(70%) scale(.94); opacity: 0; } }
+.hitcard img { width: 96px; aspect-ratio: 5/7; object-fit: cover; border-radius: 5px; display: block; animation: cardin .55s cubic-bezier(.2,1.2,.4,1) backwards; }
+.hitinfo { min-width: 0; display: flex; flex-direction: column; }
+.hitinfo h3 { margin: 0; font-size: 17px; font-weight: 900; overflow-wrap: anywhere; }
+.hitprice { font-size: 23px; font-weight: 900; margin: 3px 0 auto; }
+.hitinfo .btn { padding: 10px; margin-top: 7px; }
+.livelink.dark { color: var(--sub); font-size: 12.5px; justify-self: auto; padding: 6px 0 0; }
+.hitothers { grid-column: 1 / -1; display: flex; gap: 6px; overflow-x: auto; }
+.hitothers button { flex: none; background: none; border: 0; padding: 0; }
+.hitothers img { width: 44px; aspect-ratio: 5/7; object-fit: cover; border-radius: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  #view img, #modal img { opacity: 1; }
+}
