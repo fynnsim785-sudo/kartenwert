@@ -648,6 +648,11 @@ h2 { font-weight: 900; }
 .ranges.hours button { width: auto; min-width: 72px; height: 36px; border-radius: 18px; padding: 0 14px; background: var(--soft); color: var(--text); }
 .ranges.hours button.on { background: var(--range); color: #fff; }
 
+/* Sprache im Scanner */
+.langs { grid-column: 1 / -1; display: flex; gap: 6px; }
+.langs button { flex: 1; min-width: 0; background: var(--soft); border: 0; border-radius: 14px; padding: 6px 4px; font-size: 13px; font-weight: 700; color: var(--text); }
+.langs button.on { background: var(--range); color: #fff; }
+
 /* Echtheitsprobe */
 #live.proof { z-index: 45; }
 .pvdots { display: flex; gap: 7px; }

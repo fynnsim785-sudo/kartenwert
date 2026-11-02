@@ -18,7 +18,10 @@ export function loadIndex() {
 export async function visualSearch(source, x, y, w, h, limit = 10) {
   const idx = await loadIndex();
   if (!idx) return [];
-  const queries = [[0, 0, 1], [0, 0, .95], [.02, 0, .96], [-.02, 0, .96], [0, .02, .96], [0, -.02, .96]].map(([dx, dy, s]) => {
+  // Die Karte liegt selten genau im Rahmen: mehrere Größen und Lagen probieren.
+  const spots = [[0, 0, 1], [0, 0, .95], [.02, 0, .96], [-.02, 0, .96], [0, .02, .96], [0, -.02, .96]];
+  for (const s of [.9, .84, .78, .72]) for (const [dx, dy] of [[0, 0], [.04, 0], [-.04, 0], [0, .04], [0, -.04]]) spots.push([dx, dy, s]);
+  const queries = spots.map(([dx, dy, s]) => {
     const sw = w * s, sh = h * s;
     return fingerprint(source, x + (w - sw) / 2 + w * dx, y + (h - sh) / 2 + h * dy, sw, sh);
   });

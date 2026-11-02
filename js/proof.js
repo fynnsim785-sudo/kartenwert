@@ -1,6 +1,7 @@
 // Echtheitsprobe: Die Karte muss vor der Kamera zufällige Bewegungen machen und umgedreht werden.
 // Ein Bild auf einem Monitor oder ein Foto aus dem Internet kann das nicht.
-import { VISUAL_SURE, visualSearch, hashCanvas, hashUrl, distance, loadIndex } from './scan.js';
+import { hashCanvas, identify } from './scan.js';
+import { MATCH_SURE, readRegion, compareCard } from './match.js';
 import { ICON } from './icons.js';
 
 const TEXT = {
@@ -126,19 +127,17 @@ function reached(step, pose) {
   return false;
 }
 
-// Passt das Kamerabild zur Karte, die geprüft werden soll?
+// Passt das Kamerabild wirklich zur Karte, die geprüft werden soll? Ohne Bestätigung gilt: nein.
 async function sameCard(card, video, r) {
-  if (card.game === 'pokemon' && await loadIndex()) {
-    const hits = await visualSearch(video, r.x, r.y, r.w, r.h, 12);
-    const want = String(card.id).replace(/^[a-z]{2}:/, '');
-    if (hits.some(h => h.d <= VISUAL_SURE + 6 && String(h.key).replace(/^[a-z]{2}:/, '') === want)) return true;
-  }
-  const official = card.image ? await hashUrl(card.image) : null;
-  if (!official) return card.game === 'yugioh' || !card.image; // Diese Quelle erlaubt keinen Bildvergleich.
+  const res = await compareCard(readRegion(video, r), card.image);
+  if (res) return res.blocks >= MATCH_SURE;
+  // Yu-Gi-Oh!-Bilder lassen sich nicht auslesen: Dann muss die Texterkennung genau diese Karte finden.
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.round(r.w)); c.height = Math.max(1, Math.round(r.h));
   c.getContext('2d').drawImage(video, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
-  return distance(hashCanvas(c), official) <= 24;
+  const blob = await new Promise(done => c.toBlob(done, 'image/jpeg', .94));
+  const found = await identify(blob, card.game).catch(() => ({ cards: [] }));
+  return found.cards.some(x => x.id === card.id);
 }
 
 // Ergebnis: { ok: true, frames } oder { ok: false, reason }. frames: Fingerabdrücke, nie die Bilder selbst.
@@ -276,7 +275,7 @@ export async function runProof({ card, steps, stream }) {
       const r0 = frameRect();
       const tracker = makeTracker(r0.w / regionOf(r0).w * AW, r0.h / regionOf(r0).h * AH);
       let phase = 'hold', stepIndex = 0, calm = 0, streak = 0, ticks = 0, phaseAt = Date.now();
-      let liveDiff = 0, liveCount = 0, busy = false;
+      let liveDiff = 0, liveCount = 0, busy = false, wrong = 0;
 
       const say = (title, text) => {
         if (titleEl.textContent !== title) titleEl.textContent = title;
@@ -296,6 +295,17 @@ export async function runProof({ card, steps, stream }) {
         try {
           ticks++;
           const { variance, motion } = read();
+          if (phase === 'final') {
+            // Zum Schluss muss wieder genau diese Karte gerade im Rahmen zu sehen sein.
+            say(`Schritt ${stepIndex + 1} von ${steps.length}`, 'Halte die Vorderseite gerade in den Rahmen');
+            if (await sameCard(card, video, frameRect())) {
+              dots.forEach(d => d.classList.add('on'));
+              finish({ ok: true, frames });
+            } else if (Date.now() - phaseAt > 9000) {
+              finish({ ok: false, reason: 'Das ist nicht die richtige Karte.' });
+            }
+            return;
+          }
           if (phase !== 'hold' && Date.now() - phaseAt > STEP_LIMIT) {
             finish({ ok: false, reason: 'Die Zeit ist abgelaufen. Versuche es noch einmal.' });
             return;
@@ -311,7 +321,10 @@ export async function runProof({ card, steps, stream }) {
             const r = frameRect();
             say('Karte wird geprüft', 'Einen Moment …');
             if (!await sameCard(card, video, r)) {
-              finish({ ok: false, reason: 'Das ist nicht die richtige Karte.' });
+              // Ein einzelnes unscharfes Bild zählt noch nicht, erst mehrere Fehlversuche.
+              if (++wrong >= 5) { finish({ ok: false, reason: 'Das ist nicht die richtige Karte.' }); return; }
+              say('Karte in den Rahmen', 'Halte sie gerade und ganz im Rahmen.');
+              calm = 4;
               return;
             }
             read();
@@ -338,8 +351,8 @@ export async function runProof({ card, steps, stream }) {
               say(`Schritt ${stepIndex + 1} von ${steps.length}`, 'Zeig wieder die Vorderseite');
               if (res.score >= .6) {
                 if (++streak >= 3) {
-                  dots.forEach(d => d.classList.add('on'));
-                  finish({ ok: true, frames });
+                  phase = 'final';
+                  phaseAt = Date.now();
                 }
               } else streak = 0;
             }

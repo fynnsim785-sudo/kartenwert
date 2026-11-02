@@ -1,11 +1,14 @@
 // Live-Scanner: erkennt Karten direkt im Kamerabild und nimmt sie automatisch auf.
 import { VISUAL_SURE, visualSearch, cardFromKey, identify, checkPhoto, loadIndex } from './scan.js';
-import { GAMES } from './cards.js';
+import { GAMES, getCard } from './cards.js';
+import { MATCH_SURE, readRegion, compareCard } from './match.js';
 import { ICON } from './icons.js';
 import { cardFlight } from './fx.js';
 import { runProof, quickSteps, cameraAllowed } from './proof.js';
 
 const money = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+const LANGS = { de: 'Deutsch', en: 'Englisch', ja: 'Japanisch' };
+const rawId = c => String(c.id).replace(/^[a-z]{2}:/, '');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const thumb = c => c.image || '';
 
@@ -132,6 +135,7 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
         ${hasCard(top) ? '<button class="btn" data-live="skip">Hast du schon · Weiter</button>' : '<button class="btn" data-live="add">Hinzufügen</button>'}
         ${hasCard(top) ? '' : '<button class="livelink dark" data-live="skip">Falsche Karte</button>'}
       </div>
+      ${top.game === 'pokemon' ? `<div class="langs">${Object.entries(LANGS).map(([l, name]) => `<button data-live="lang" data-lang="${l}" class="${String(top.id).startsWith(l + ':') ? 'on' : ''}">${name}</button>`).join('')}</div>` : ''}
       ${cards.length > 1 ? `<div class="hitothers">${cards.slice(1).map((c, i) => `<button data-live="swap" data-i="${i + 1}"><img src="${esc(thumb(c))}" alt="${esc(c.set)}"></button>`).join('')}</div>` : ''}`;
     panel.hidden = false;
     panel.classList.remove('in'); void panel.offsetWidth; panel.classList.add('in');
@@ -144,14 +148,20 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
     paused = true;
     lockFx();
     hint.textContent = 'Erkannt';
+    const region = readRegion(video, frameRect());
     const blob = await snap();
-    const near = hits.filter(h => h.d <= hits[0].d + 10).slice(0, 6);
-    const cards = (await Promise.all(near.map(h => cardFromKey(h.key)))).filter(Boolean);
-    const seen = new Set();
-    const unique = cards.filter(c => !seen.has(c.id) && seen.add(c.id));
+    // Der Fingerabdruck schlägt nur vor. Gezeigt wird, was dem Originalbild wirklich gleicht.
+    const near = hits.filter(h => h.d <= hits[0].d + 14).slice(0, 20);
+    const seenKey = new Set();
+    const keys = near.filter(h => { const k = h.key.replace(/^[a-z]{2}:/, ''); return !seenKey.has(k) && seenKey.add(k); }).slice(0, 10);
+    const cards = (await Promise.all(keys.map(h => cardFromKey(h.key)))).filter(Boolean);
+    const scored = await Promise.all(cards.map(async c => ({ c, m: await compareCard(region, c.image) })));
     if (closed) return;
-    if (!unique.length) { resume('Karte wird gesucht …'); return; }
-    showHit(unique, blob);
+    // Dasselbe Motiv gibt es oft in mehreren Sprachen: Bei fast gleichem Wert gewinnt Deutsch, dann Englisch.
+    const rankOf = s => s.m.blocks + s.m.whole * .2 + ({ de: .08, en: .04 }[String(s.c.id).split(':')[0]] || 0);
+    const good = scored.filter(s => s.m && s.m.blocks >= MATCH_SURE).sort((a, b) => rankOf(b) - rankOf(a));
+    if (!good.length) { resume('Karte wird gesucht …'); return; }
+    showHit(good.map(s => s.c), blob);
   }
 
   async function tick() {
@@ -198,6 +208,14 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
       b.classList.toggle('on', torch);
     }
     if (what === 'skip') resume();
+    if (what === 'lang') {
+      // Dieselbe Karte in einer anderen Sprache: Bild und Preis kommen aus dem Katalog.
+      const cards = panel._cards;
+      const other = await getCard('pokemon', b.dataset.lang + ':' + rawId(cards[0])).catch(() => null);
+      if (closed) return;
+      if (!other) { b.textContent = 'Gibt es nicht'; b.disabled = true; return; }
+      showHit([other, ...cards.slice(1)], panel._blob);
+    }
     if (what === 'swap') {
       const cards = panel._cards, i = Number(b.dataset.i);
       showHit([cards[i], ...cards.filter((_, k) => k !== i)], panel._blob);
