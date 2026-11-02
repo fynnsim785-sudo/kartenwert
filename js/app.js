@@ -639,7 +639,7 @@ function renderProfile() {
       <p>Preise kommen von Cardmarket, TCGplayer, Scryfall und YGOPRODeck und können veraltet sein.</p>
       <p>Gekaufte Karten sind nur digital. Zur Sammlung zählen Kamera-Scans und Käufe, Galerie-Bilder nicht.</p>
       <p>Sammlung und Name liegen nur auf diesem Gerät. Fotos werden nicht hochgeladen.</p>
-      <p>Version 1.3.1</p>
+      <p>Version 1.4.0</p>
     </details>`;
 }
 
