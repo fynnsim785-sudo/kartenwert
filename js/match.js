@@ -2,9 +2,13 @@
 // Der Fingerabdruck findet Kandidaten, erst dieser Vergleich sagt, ob es wirklich dieselbe Karte ist.
 // Grenze für die Bildteile. Simuliert gemessen: andere Karten höchstens .54 (99 % unter .42), dieselbe Karte bei Glanz und Unschärfe ab .55.
 export const MATCH_SURE = .55;
+// Ab hier gilt eine Karte als die richtige, auch wenn ein Teil verdeckt ist.
+export const COVER_HINT = .4;
 
 const SW = 150, SH = 210, WIDEN = 1.3; // Ausschnitt um den Rahmen
 const GX = 28, GY = 18; // Messpunkte im Kartenmotiv
+// Grenzen für verdeckte Stellen.
+const COVER_LIMIT = .7, COVER_CELLS = 3, COVER_VISIBLE = .7;
 const images = new Map();
 
 function loadOfficial(url) {
@@ -18,7 +22,10 @@ function loadOfficial(url) {
       const x = c.getContext('2d', { willReadFrequently: true });
       x.imageSmoothingQuality = 'high';
       x.drawImage(img, 0, 0, 100, 140);
-      resolve(toGray(x.getImageData(0, 0, 100, 140).data, 100, 140));
+      const data = x.getImageData(0, 0, 100, 140).data;
+      const gray = toGray(data, 100, 140);
+      gray.rgb = data;
+      resolve(gray);
     };
     img.onerror = () => resolve(null); // Quelle erlaubt keinen Vergleich
     img.src = url;
@@ -101,10 +108,152 @@ export function readRegion(source, r) {
   const x = c.getContext('2d', { willReadFrequently: true });
   x.imageSmoothingQuality = 'high';
   x.drawImage(source, r.x + r.w / 2 - w / 2, r.y + r.h / 2 - h / 2, w, h, 0, 0, SW, SH);
-  return { gray: toGray(x.getImageData(0, 0, SW, SH).data, SW, SH), cw: SW / WIDEN * r.w / (r.h * SW / SH), ch: SH / WIDEN };
+  const data = x.getImageData(0, 0, SW, SH).data;
+  return { gray: toGray(data, SW, SH), rgb: data, cw: SW / WIDEN * r.w / (r.h * SW / SH), ch: SH / WIDEN };
 }
 
-// Ergebnis: art = Übereinstimmung des Motivs, whole = der ganzen Karte. null, wenn kein Vergleich möglich ist.
+// Löst die Gleichungen der Lichtanpassung.
+function solve(m, b) {
+  const n = b.length;
+  for (let i = 0; i < n; i++) {
+    let top = i;
+    for (let r = i + 1; r < n; r++) if (Math.abs(m[r][i]) > Math.abs(m[top][i])) top = r;
+    [m[i], m[top]] = [m[top], m[i]]; [b[i], b[top]] = [b[top], b[i]];
+    const d = m[i][i] || 1e-6;
+    for (let r = i + 1; r < n; r++) {
+      const f = m[r][i] / d;
+      for (let k = i; k < n; k++) m[r][k] -= f * m[i][k];
+      b[r] -= f * b[i];
+    }
+  }
+  const x = new Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    let v = b[i];
+    for (let k = i + 1; k < n; k++) v -= m[i][k] * x[k];
+    x[i] = v / (m[i][i] || 1e-6);
+  }
+  return x;
+}
+
+// Passt das Originalbild an das Licht im Kamerabild an, auch an Verlauf und hellen Fleck auf der Karte.
+function fitLight(pts, ch) {
+  const feats = p => { const o = p.off[ch]; return [o, o * p.u, o * p.v, o * p.u * p.u, o * p.v * p.v, o * p.u * p.v, 1]; };
+  const model = (w, p) => feats(p).reduce((sum, f, i) => sum + f * w[i], 0);
+  let keep = pts, w = [1, 0, 0, 0, 0, 0, 0];
+  for (let round = 0; round < 3; round++) {
+    const m = w.map(() => w.map(() => 0)), b = w.map(() => 0);
+    for (const p of keep) {
+      const f = feats(p);
+      for (let i = 0; i < f.length; i++) {
+        b[i] += f[i] * p.cam[ch];
+        for (let k = 0; k < f.length; k++) m[i][k] += f[i] * f[k];
+      }
+    }
+    w = solve(m, b);
+    // Finger und Glanz sollen die Anpassung nicht verziehen.
+    keep = pts.map(p => ({ p, e: Math.abs(model(w, p) - p.cam[ch]) })).sort((x, y) => x.e - y.e)
+      .slice(0, Math.ceil(pts.length * .6)).map(x => x.p);
+  }
+  return p => model(w, p);
+}
+
+const CX = 14, CY = 20, PER = 4; // Raster über die ganze Karte
+const areaOf = v => (v < .11 ? 'Name' : v < .56 ? 'Bild' : v < .89 ? 'Text' : 'Logo oder Nummer');
+
+// Legt die Karte genauer auf das Kamerabild, sonst sehen feine Schrift und Kanten wie Fehler aus.
+function refinePose(region, whole, pose) {
+  let best = pose, top = ncc(region.gray, whole, pose, region.cw, region.ch);
+  for (const scale of [1, .5, .25]) {
+    for (let again = 0; again < 2; again++) {
+      for (const [key, step] of [['s', .012], ['dx', 1.2], ['dy', 1.2], ['r', .012]]) {
+        for (const dir of [1, -1]) {
+          const next = { ...best, [key]: best[key] + step * scale * dir };
+          const v = ncc(region.gray, whole, next, region.cw, region.ch);
+          if (v > top) { top = v; best = next; }
+        }
+      }
+    }
+  }
+  return best;
+}
+
+// Sucht Stellen, an denen das Kamerabild nicht zum Original passt: Dort liegt etwas auf der Karte.
+// Verglichen wird der Mittelwert je Feld. Feine Schrift mittelt sich weg, ein Finger nicht.
+function coverage(off, region, p) {
+  const none = { covered: [], top: 0, typical: 0 };
+  if (!off.rgb || !region.rgb) return none;
+  const cos = Math.cos(p.r), sin = Math.sin(p.r), pts = [];
+  for (let y = 0; y < CY * PER; y++) {
+    for (let x = 0; x < CX * PER; x++) {
+      const u = .015 + .97 * (x + .5) / (CX * PER), v = .015 + .97 * (y + .5) / (CY * PER);
+      const at = (Math.floor(v * 140) * 100 + Math.floor(u * 100)) * 4;
+      if (off.rgb[at + 3] < 250) continue; // abgerundete Ecke
+      const x0 = (u - .5) * region.cw * p.s, y0 = (v - .5) * region.ch * p.s;
+      const X = Math.round(SW / 2 + p.dx + x0 * cos - y0 * sin), Y = Math.round(SH / 2 + p.dy + x0 * sin + y0 * cos);
+      const inside = X >= 0 && Y >= 0 && X < SW && Y < SH;
+      const c = (Y * SW + X) * 4;
+      pts.push({
+        u: u - .5, v: v - .5, cell: Math.floor(y / PER) * CX + Math.floor(x / PER), inside,
+        off: [off.rgb[at], off.rgb[at + 1], off.rgb[at + 2]],
+        cam: inside ? [region.rgb[c], region.rgb[c + 1], region.rgb[c + 2]] : [0, 0, 0],
+      });
+    }
+  }
+  const seen = pts.filter(q => q.inside);
+  if (seen.length < 50) return none;
+  const fits = [0, 1, 2].map(ch => fitLight(seen, ch));
+  // Der Kontrast im Bild ist der Maßstab, damit dunkle und helle Aufnahmen gleich zählen.
+  let sum = 0, sq = 0;
+  for (const q of seen) { const v = fits[1](q); sum += v; sq += v * v; }
+  const sd = Math.sqrt(Math.max(1, sq / seen.length - (sum / seen.length) ** 2));
+  const signed = [0, 1, 2].map(() => new Float32Array(CX * CY)), count = new Float32Array(CX * CY), missing = new Float32Array(CX * CY);
+  for (const q of pts) {
+    count[q.cell]++;
+    if (!q.inside) { missing[q.cell]++; continue; }
+    for (let ch = 0; ch < 3; ch++) signed[ch][q.cell] += q.cam[ch] - fits[ch](q);
+  }
+  const cells = Array.from(count, (n, i) => {
+    if (!n) return 0;
+    if (missing[i] > n / 2) return 9; // außerhalb des Bildes
+    return Math.max(Math.abs(signed[0][i]), Math.abs(signed[1][i]), Math.abs(signed[2][i])) / n / sd; // stärkster Farbkanal, ein Finger auf gelbem Rand fällt nur im Blau auf
+  });
+  const typical = [...cells].sort((x, y) => x - y)[Math.floor(cells.length / 2)];
+  const limit = Math.max(COVER_LIMIT, typical * 3);
+  const stillVisible = group => {
+    const inGroup = new Set(group);
+    let n = 0, so = 0, sc = 0, oo = 0, cc = 0, oc = 0;
+    for (const q of pts) {
+      if (!q.inside || !inGroup.has(q.cell)) continue;
+      const o = q.off[1], c = q.cam[1];
+      n++; so += o; sc += c; oo += o * o; cc += c * c; oc += o * c;
+    }
+    if (n < 8) return false;
+    const vo = oo - so * so / n, vc = cc - sc * sc / n;
+    if (vo / n < 60 || vc <= 0) return false; // einfarbige Stelle: nichts zum Vergleichen
+    return (oc - so * sc / n) / Math.sqrt(vo * vc) > COVER_VISIBLE;
+  };
+  // Zusammenhängende auffällige Felder: Einzelne Ausreißer durch Glanz oder Rauschen zählen nicht.
+  const seenCell = new Uint8Array(cells.length), hit = new Set();
+  let largest = 0;
+  cells.forEach((e, start) => {
+    if (e <= limit || seenCell[start]) return;
+    const group = [start];
+    seenCell[start] = 1;
+    for (let g = 0; g < group.length; g++) {
+      const i = group[g], col = i % CX;
+      for (const k of [col > 0 ? i - 1 : -1, col < CX - 1 ? i + 1 : -1, i - CX, i + CX]) {
+        if (k >= 0 && k < cells.length && !seenCell[k] && cells[k] > limit) { seenCell[k] = 1; group.push(k); }
+      }
+    }
+    // Sieht man das Motiv unter der Stelle noch, ist es Glanz und nichts liegt auf der Karte.
+    if (stillVisible(group)) return;
+    largest = Math.max(largest, group.length);
+    if (group.length >= COVER_CELLS) group.forEach(i => hit.add(areaOf((Math.floor(i / CX) + .5) / CY)));
+  });
+  return { covered: [...hit], largest, typical };
+}
+
+// Ergebnis: covered = verdeckte Bereiche der Karte. art = Übereinstimmung des Motivs, whole = der ganzen Karte. null, wenn kein Vergleich möglich ist.
 export async function compareCard(region, imageUrl) {
   if (!imageUrl) return null;
   const off = await loadOfficial(imageUrl.replace('/high.webp', '/low.webp'));
@@ -122,5 +271,6 @@ export async function compareCard(region, imageUrl) {
   }
   parts.sort((x, y) => x - y);
   const blocks = (parts[1] + parts[2] + parts[3]) / 3; // ohne die besten zwei, damit Glanz und Finger wenig stören
-  return { art: score, blocks, whole: ncc(region.gray, whole, pose, region.cw, region.ch) };
+  const cover = coverage(off, region, refinePose(region, whole, pose));
+  return { art: score, blocks, whole: ncc(region.gray, whole, pose, region.cw, region.ch), covered: cover.covered, largest: cover.largest, typical: cover.typical };
 }

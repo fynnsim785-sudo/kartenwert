@@ -6,8 +6,20 @@ import { loadFeed, topCards, findFeedCard } from './feed.js';
 import { countTo, flyToCollection, attachTilt, drawChart, enterPage, observeReveal, attachDrag } from './fx.js';
 import { ICON } from './icons.js';
 import * as market from './market.js';
+import { PACKS, PACK_CLIP, packById, packFace, rollPack, playPack } from './packs.js';
 
 const CENTS = 100;
+// Rabatt: Etwa jede vierte Karte kostet diese Woche 5 bis 10 % weniger. Jede Karte nur einmal, damit kein Geld-Glitch entsteht.
+const DISCOUNT_MAX = 10;
+function discountOf(card) {
+  const ident = cardIdent(card);
+  if (state.discountUsed.includes(ident)) return 0;
+  let h = Math.floor(Date.now() / 604800000);
+  for (const ch of ident) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  return h % 4 ? 0 : 5 + (h >>> 8) % (DISCOUNT_MAX - 4);
+}
+const discountCut = card => Math.round(cents(card.price) * discountOf(card) / 100);
 const START_BALANCE = 1000;
 const DEX_TOTAL = 1025;
 const STORE = 'kartenwert.v1';
@@ -56,6 +68,7 @@ function load() {
   s.watch = s.watch || [];
   s.ledger = s.ledger || 0; // Käufe und Verkäufe mit dem App-Guthaben, in Cent
   s.events = s.events || [];
+  s.discountUsed = s.discountUsed || [];
   s.name = s.name || 'Sammler';
   s.lastRefresh = s.lastRefresh || 0;
   if (s.cards.some(c => c.game === 'pokemon' && !c.setId)) s.lastRefresh = 0; // ältere Karten ergänzen
@@ -317,8 +330,9 @@ function openPreview(card, note) {
     </div>
     ${note ? `<p class="note">${esc(note)}</p>` : ''}
     <div class="walletline"><span>Guthaben</span><b>${eur(freeBalance())}</b></div>
+    ${discountCut(card) ? `<div class="deal"><span>Rabatt ${discountOf(card)} %</span><s>${money.format(card.price)}</s><b>${eur(cents(card.price) - discountCut(card))}</b></div>` : ''}
     <div class="btns">
-      ${card.price ? `<button class="btn buy" data-buy-card ${cents(card.price) > freeBalance() ? 'disabled' : ''}>${cents(card.price) > freeBalance() ? 'Nicht genug Guthaben' : `Kaufen`}</button>` : ''}
+      ${card.price ? `<button class="btn buy" data-buy-card ${cents(card.price) - discountCut(card) > freeBalance() ? 'disabled' : ''}>${cents(card.price) - discountCut(card) > freeBalance() ? 'Nicht genug Guthaben' : `Kaufen`}</button>` : ''}
       <button class="btn sec" data-go-scan>Scannen</button>
     </div></div>`;
   modal.hidden = false;
@@ -624,7 +638,7 @@ function renderProfile() {
   const started = [...bySet.values()].sort((a, b) => b.v - a.v).slice(0, 4);
   const games = Object.entries(GAMES).map(([k, label]) => ({ label, v: counted(k).reduce((s, c) => s + cents(c.price), 0), n: counted(k).length }));
   const when = at => new Date(at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-  const KIND = { kauf: 'Gekauft', verkauf: 'Verkauft', scan: 'Gescannt' };
+  const KIND = { kauf: 'Gekauft', verkauf: 'Verkauft', scan: 'Gescannt', pack: 'Pack geöffnet' };
   view.innerHTML = `
     <div class="ptop">
       ${ui.editName ? `<div class="nameedit"><input id="nameInput" maxlength="18" value="${esc(state.name)}" aria-label="Dein Name"><button data-save-name aria-label="Speichern">${ICON.check}</button></div>`
@@ -648,14 +662,14 @@ function renderProfile() {
     ${state.events.length ? `<div class="head"><h2>Verlauf</h2></div>
       <div class="rows">${state.events.slice(0, 8).map(e => `<div class="item"><img src="${esc(e.image)}" alt="">
         <span class="left"><span class="name">${esc(e.name)}</span><span class="sub">${KIND[e.kind]} · ${when(e.at)}</span></span>
-        <span class="right ${e.kind === 'kauf' ? '' : 'up'}">${e.kind === 'kauf' ? '-' : '+'}${eur(Math.abs(e.amount))}</span></div>`).join('')}</div>` : ''}
+        <span class="right ${e.kind === 'kauf' || e.kind === 'pack' ? '' : 'up'}">${e.kind === 'kauf' || e.kind === 'pack' ? '-' : '+'}${eur(Math.abs(e.amount))}</span></div>`).join('')}</div>` : ''}
     <details class="facts"><summary><span>Infos</span>${ICON.chevron}</summary>
       <p>Das Guthaben ist nur eine Anzeige in der App. Du kannst es nicht abheben oder außerhalb der App ausgeben.</p>
       <p>Preise kommen von Cardmarket, TCGplayer, Scryfall und YGOPRODeck und können veraltet sein.</p>
       <p>Gekaufte und ersteigerte Karten sind nur digital. Zur Sammlung zählen Kamera-Scans mit Echtheitsprobe und Käufe, Galerie-Bilder nicht.</p>
       <p>Auktionen laufen nur mit App-Guthaben. Geprüft wird auf dem Gerät, von den Fotos bleibt nur ein Fingerabdruck auf dem Server.</p>
       <p>Sammlung und Name liegen nur auf diesem Gerät. Fotos werden nie hochgeladen.</p>
-      <p>Version 1.5.2</p>
+      <p>Version 1.6.0</p>
     </details>`;
 }
 
@@ -862,12 +876,13 @@ async function buyCard(from) {
   if (!seen) return;
   if (hasCard(seen)) { toast('Du hast diese Karte schon.'); return; }
   const fresh = await getCard(seen.game, seen.id).catch(() => null) || seen;
-  const price = cents(fresh.price);
-  if (!price) { toast('Für diese Karte gibt es keinen Preis.'); return; }
+  if (!cents(fresh.price)) { toast('Für diese Karte gibt es keinen Preis.'); return; }
+  const cut = discountCut(fresh), price = cents(fresh.price) - cut;
   if (price > freeBalance()) { toast('Nicht genug Guthaben.'); return; }
   state.ledger -= price;
+  if (cut) state.discountUsed.push(cardIdent(fresh));
   // Kurve beginnt erst mit dem Kauf, davor gehörte dir die Karte nicht.
-  addToCollection({ ...fresh, hist: {}, buyPrice: fresh.price, boughtAt: Date.now() }, true, null);
+  addToCollection({ ...fresh, hist: {}, buyPrice: price / CENTS, boughtAt: Date.now() }, true, null);
   logEvent('kauf', fresh, -price);
   save();
   flyToCollection(from, '');
@@ -891,6 +906,61 @@ async function sellBack(key) {
   const profit = value - cents(c.buyPrice);
   toast(`Verkauft für ${eur(value)}. ${profit >= 0 ? 'Gewinn' : 'Verlust'}: ${eur(Math.abs(profit))}`);
   renderTab();
+}
+
+// Die Pack-Regale im Markt.
+function packShelves() {
+  const shelf = (title, tier) => `<div class="head"><h2>${title}</h2></div><div class="shelf stag">${PACKS.filter(p => p.tier === tier).map(p => `
+    <button class="packtile" data-pack="${esc(p.id)}"><span class="pk-mini" style="display:block;clip-path:${PACK_CLIP};font-size:10px">${packFace(p)}</span>
+      <span class="name">${esc(p.name)}</span><span class="price">${eur(p.price * CENTS)}</span><span class="sub">${p.count} Karten</span></button>`).join('')}</div>`;
+  return shelf('Packs', 'normal') + shelf('Japanische Packs', 'ja') + shelf('Alte Packs', 'old');
+}
+
+function openPack(id) {
+  const def = packById(id);
+  if (!def) return;
+  const price = def.price * CENTS, enough = price <= freeBalance();
+  modal.innerHTML = `<div class="sheet">
+    <button class="back" data-close aria-label="Zurück">${ICON.back}</button>
+    <div class="packsheet"><div class="pk-mini" style="clip-path:${PACK_CLIP};font-size:14px">${packFace(def)}</div></div>
+    <div class="detail"><div><h3>${esc(def.name)}</h3><div class="muted small">${def.count} Karten · Pokémon</div></div>
+      <div class="pricebox"><div class="big">${eur(price)}</div></div></div>
+    <div class="walletline"><span>Guthaben</span><b>${eur(freeBalance())}</b></div>
+    <p class="packnote">Bezahlt wird mit App-Guthaben. Der Inhalt ist zufällig, Karten, die du schon hast, kommen nicht vor.</p>
+    <div class="btns"><button class="btn buy" data-pack-buy="${esc(def.id)}" ${enough ? '' : 'disabled'}>${enough ? 'Kaufen und öffnen' : 'Nicht genug Guthaben'}</button></div></div>`;
+  modal.hidden = false;
+}
+
+// Bucht erst ab, wenn der Inhalt feststeht. Die Karten liegen sofort in der Sammlung, auch wenn man die Animation abbricht.
+async function buyPack(id, button) {
+  const def = packById(id), price = def ? def.price * CENTS : 0;
+  if (!def || ui.packBusy) return;
+  if (price > freeBalance()) { toast('Nicht genug Guthaben.'); return; }
+  ui.packBusy = true;
+  if (button) { button.disabled = true; button.textContent = 'Pack wird vorbereitet …'; }
+  try {
+    const cards = await rollPack(def, hasCard);
+    if (price > freeBalance()) { toast('Nicht genug Guthaben.'); return; }
+    const worth = cards.reduce((s, c) => s + (c.price || 0), 0);
+    state.ledger -= price;
+    for (const c of cards) {
+      // Der Pack-Preis verteilt sich nach Wert auf die Karten, so stimmt der Gewinn in der Sammlung.
+      const share = worth ? def.price * (c.price || 0) / worth : def.price / cards.length;
+      addToCollection({ ...c, hist: {}, buyPrice: share, boughtAt: Date.now(), fromPack: def.name }, true, null);
+    }
+    logEvent('pack', { name: def.name, image: cards[cards.length - 1].image }, -price);
+    save();
+    closeModal();
+    playPack({
+      def, cards, paid: def.price,
+      canAgain: () => price <= freeBalance(),
+      onAgain: () => buyPack(id),
+      onClose: () => renderTab(),
+    });
+  } catch (e) {
+    toast(e.message);
+    if (button) { button.disabled = false; button.textContent = 'Kaufen und öffnen'; }
+  } finally { ui.packBusy = false; }
 }
 
 function feat(item, attr, price) {
@@ -928,6 +998,7 @@ function renderMarket() {
     <div class="points"><span>Freies Guthaben <b>${eur(freeBalance())}</b></span><span>${ui.marketGame === 'all' ? '' : esc(GAMES[ui.marketGame])}</span></div>
     ${ui.auctions.length ? `<div class="head"><h2>Auktionen</h2></div>
       <div class="shelf stag">${ui.auctions.filter(a => (ui.marketGame === 'all' || a.game === ui.marketGame) && (!q || a.name.toLowerCase().includes(q))).map(auctionTile).join('')}</div>` : ''}
+    ${q || !['all', 'pokemon'].includes(ui.marketGame) ? '' : packShelves()}
     <div class="head"><h2>Empfohlen</h2></div>
     ${featured.length ? `<div class="shelf stag">${featured.join('')}</div>` : SKELETON_SHELF}
     ${watched.length ? section('Merkliste', 'watch', watched, '') : ''}
@@ -1163,6 +1234,8 @@ document.addEventListener('click', e => {
     closeModal();
     toast(card.name + ' gemerkt. Sie zählt noch nicht.');
   }
+  else if (d.packBuy) buyPack(d.packBuy, modal.querySelector('[data-pack-buy]'));
+  else if (d.pack) openPack(d.pack);
   else if ('buyCard' in d) buyCard(modal.querySelector('.cardimg'));
   else if (d.sellBack) sellBack(d.sellBack);
   else if ('editName' in d) { ui.editName = true; renderProfile(); document.getElementById('nameInput')?.select(); }
