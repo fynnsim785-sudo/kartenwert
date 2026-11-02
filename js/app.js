@@ -1,6 +1,7 @@
-import { GAMES, today, searchCards, getCard, getSets, getSet } from './cards.js';
+import { GAMES, today, searchCards, getCard, getSets, getSet, hq } from './cards.js';
 import { identify, checkPhoto } from './scan.js';
 import { openScanner } from './live.js';
+import { runProof } from './proof.js';
 import { loadFeed, topCards, findFeedCard } from './feed.js';
 import { countTo, flyToCollection, attachTilt, drawChart, enterPage, observeReveal, attachDrag } from './fx.js';
 import { ICON } from './icons.js';
@@ -22,7 +23,7 @@ const ui = {
   tab: 'home', overview: 'overview', range: '1M', cardRange: 'MAX', filter: 'all', game: 'pokemon', allValuable: false,
   photo: null, source: null, found: [], status: null, q: '', sure: false, scanning: false, scanStep: '',
   searchView: 'sets', setLang: 'de', sets: {}, set: null, preview: null, shown: START_BALANCE,
-  listings: [], catalog: [], marketReady: null, balance: null, mq: '', marketGame: 'all', open: null,
+  listings: [], auctions: [], catalog: [], marketReady: null, balance: null, mq: '', marketGame: 'all', open: null,
 };
 let feed = { topics: [], sets: [] };
 
@@ -129,21 +130,14 @@ function chartSvg(points) {
 function rangeButtons(attr, current) {
   return `<div class="ranges">${['1T', '7T', '1M', '3M', '6M', 'MAX'].map(r => `<button data-${attr}="${r}" class="${r === current ? 'on' : ''}">${r}</button>`).join('')}</div>`;
 }
-const cardImg = c => c.image ? `<img src="${esc(small(c.image))}" alt="" loading="lazy">` : '<img alt="">';
+const cardImg = c => c.image ? `<img src="${esc(hq(c.image))}" alt="" loading="lazy" decoding="async">` : '<img alt="">';
 const owned = card => state.cards.find(c => cardIdent(c) === cardIdent(card));
 const hasCard = card => { const have = owned(card); return !!(have && have.verified); };
 
 function openGames(target) {
   const current = { filter: ui.filter, game: ui.game, marketGame: ui.marketGame }[target];
   const withAll = target !== 'game';
-  const artOf = key => {
-    const topic = feed.topics.find(t => t.game === key && t.cards.some(c => c.image));
-    return topic ? topic.cards.find(c => c.image).image : null;
-  };
-  const tile = (key, name) => {
-    const art = artOf(key);
-    return `<button class="game ${art ? 'art' : ''} ${current === key ? 'on' : ''}" ${art ? `style="--art:url('${esc(small(art))}')"` : ''} data-pick-game="${key}" data-target="${target}">${esc(name)}</button>`;
-  };
+  const tile = (key, name) => `<button class="game g-${key} ${current === key ? 'on' : ''}" data-pick-game="${key}" data-target="${target}">${esc(name)}</button>`;
   modal.innerHTML = `<div class="sheet"><h3 class="center">Spiel auswählen</h3>
     <div class="games">${withAll ? tile('all', 'Alle Karten') : ''}${Object.entries(GAMES).map(([k, v]) => tile(k, v)).join('')}</div>
     <div class="btns"><button class="btn sec" data-close>Schließen</button></div></div>`;
@@ -173,6 +167,7 @@ function promoShelf() {
   if (!topics.length) return '';
   return `<div class="head"><h2>Entdecken</h2></div>
     <div class="shelf stag">${topics.map(t => `<button class="promo" data-quick="${esc(t.q)}" data-quick-game="${esc(t.game)}">
+      <i class="promobg" style="background-image:url('${esc(small(t.cards.find(c => c.image).image))}')"></i>
       <b>${esc(t.title)}</b>
       <span class="fan">${t.cards.filter(c => c.image).slice(0, 3).map(c => `<img src="${esc(small(c.image))}" alt="" loading="lazy">`).join('')}</span>
     </button>`).join('')}</div>`;
@@ -181,7 +176,7 @@ function feedHtml(kind) {
   const top = topCards(feed, 10);
   const topBlock = top.length ? `<div class="head"><h2>Am teuersten</h2></div><div class="shelf stag">${top.map(feedTile).join('')}</div>`
     : `<div class="head"><h2>Am teuersten</h2></div>${SKELETON_SHELF}`;
-  if (kind === 'home') return promoShelf() + topBlock + setsShelf() + feed.topics.slice(0, 3).map(topicShelf).join('');
+  if (kind === 'home') return (ui.auctions.length ? `<div class="head"><h2>Auktionen</h2><button class="link" data-go="market">Alle</button></div><div class="shelf stag">${ui.auctions.slice(0, 8).map(auctionTile).join('')}</div>` : '') + promoShelf() + topBlock + setsShelf() + feed.topics.slice(0, 3).map(topicShelf).join('');
   if (kind === 'search') return topBlock;
   if (kind === 'market') return feed.topics.map(topicShelf).join('') || SKELETON_SHELF;
   return setsShelf() + topBlock;
@@ -238,14 +233,14 @@ function renderHome(animate = true) {
       ${box('Verlierer', loss, 'Keine Karte im Minus.')}`;
   } else {
     const valuable = [...withChange].sort((a, b) => (b.c.price || 0) - (a.c.price || 0));
-    const visible = ui.allValuable ? valuable : valuable.slice(0, 4);
+    const visible = ui.allValuable ? valuable : valuable.slice(0, 5);
     const fan = valuable.filter(g => g.c.image).slice(0, 3);
     view.innerHTML = `${head}
       ${chartSvg(points)}
       ${rangeButtons('range', ui.range)}
       <section class="panel"><h2>Am wertvollsten</h2>
         <div class="rows stag">${visible.map(g => itemRow(g.c, g.ch)).join('')}</div>
-        ${valuable.length > 4 ? `<button class="link viewall" data-all-valuable>${ui.allValuable ? 'Weniger' : 'Alle anzeigen'}</button>` : ''}
+        ${valuable.length > 5 ? `<button class="link viewall" data-all-valuable>${ui.allValuable ? 'Weniger' : 'Alle anzeigen'}</button>` : ''}
       </section>
       <button class="banner" data-go="portfolio"><span><b>${cards.length} ${cards.length === 1 ? 'Karte' : 'Karten'}</b><span>Ganze Sammlung ansehen</span></span>
         <span class="fan">${fan.map(g => `<img src="${esc(small(g.c.image))}" alt="">`).join('')}</span></button>
@@ -264,8 +259,10 @@ function openCard(key) {
   ui.open = key;
   modal.innerHTML = `<div class="sheet">
     <button class="back" data-close aria-label="Zurück">${ICON.back}</button>
-    ${c.image ? `<div class="holo"><img class="cardimg" src="${esc(c.image)}" alt=""><span class="gloss"></span></div>` : ''}
+    ${c.image ? `<div class="holo"><img class="cardimg" src="${esc(hq(c.image))}" alt=""><span class="gloss"></span></div>` : ''}
+    ${auctionTicker(c)}
     <div class="detail">
+      ${c.verified ? '' : `<button class="star on" data-remove="${esc(c.key)}" aria-label="Nicht mehr merken">${ICON.star}</button>`}
       <div><h3>${esc(c.name)}</h3>
         <div class="muted small">${esc(GAMES[c.game])} · <span class="setname">${esc(c.set)}</span></div>
         <div class="muted small">${[c.rarity, c.number && '#' + c.number].filter(Boolean).map(esc).join(' · ')}</div></div>
@@ -282,8 +279,9 @@ function openCard(key) {
       <div class="btns"><button class="btn" data-sell-back="${esc(c.key)}"><span>Verkaufen · ${money.format(c.price || 0)}</span></button></div>`
       : `<p class="note ${c.verified ? 'ok' : 'warn'}" style="margin:0">${c.verified ? 'Gescannt' : 'Zählt nicht. Scanne oder kaufe die Karte.'}</p>`}
     ${c.verified && c.buyPrice == null && ui.marketReady ? `<div class="head"><h2>Verkaufen</h2></div>
-      <div class="fieldwrap"><input class="field" id="sellPrice" type="number" min="0.01" max="100000" step="0.01" value="${Math.max(0.01, c.price || 0).toFixed(2)}" aria-label="Preis in Euro"><span>€</span></div>
-      <div class="btns"><button class="btn" data-sell="${esc(c.key)}">Anbieten</button></div>` : ''}
+      <div class="btns"><button class="btn" data-auction-form="${esc(c.key)}">Versteigern</button></div>
+      <div class="fieldwrap" style="margin-top:10px"><input class="field" id="sellPrice" type="number" min="0.01" max="100000" step="0.01" value="${Math.max(0.01, c.price || 0).toFixed(2)}" aria-label="Preis in Euro"><span>€</span></div>
+      <div class="btns"><button class="btn sec" data-sell="${esc(c.key)}">Zum Festpreis anbieten</button></div>` : ''}
     <div class="btns"><button class="btn sec" data-remove="${esc(c.key)}">Aus der Sammlung entfernen</button></div></div>`;
   modal.hidden = false;
   attachTilt(modal);
@@ -297,8 +295,10 @@ function openPreview(card, note) {
   ui.preview = card;
   modal.innerHTML = `<div class="sheet">
     <button class="back" data-close aria-label="Zurück">${ICON.back}</button>
-    ${card.image ? `<div class="holo"><img class="cardimg" src="${esc(card.image)}" alt=""><span class="gloss"></span></div>` : ''}
+    ${card.image ? `<div class="holo"><img class="cardimg" src="${esc(hq(card.image))}" alt=""><span class="gloss"></span></div>` : ''}
+    ${auctionTicker(card)}
     <div class="detail">
+      ${have ? `<button class="star on" data-remove="${esc(have.key)}" aria-label="Nicht mehr merken">${ICON.star}</button>` : '<button class="star" data-add-preview aria-label="Merken">' + ICON.star + '</button>'}
       <div><h3>${esc(card.name)}</h3>
         <div class="muted small">${esc(GAMES[card.game])} · <span class="setname">${esc(card.set)}</span></div>
         <div class="muted small">${[card.rarity, card.number && '#' + card.number].filter(Boolean).map(esc).join(' · ')}</div></div>
@@ -309,7 +309,6 @@ function openPreview(card, note) {
     <div class="btns">
       ${card.price ? `<button class="btn buy" data-buy-card ${cents(card.price) > freeBalance() ? 'disabled' : ''}>${cents(card.price) > freeBalance() ? 'Nicht genug Guthaben' : `Kaufen`}</button>` : ''}
       <button class="btn sec" data-go-scan>Scannen</button>
-      ${have ? '' : '<button class="btn ghostbtn" data-add-preview>Merken</button>'}
     </div></div>`;
   modal.hidden = false;
   attachTilt(modal);
@@ -380,7 +379,8 @@ function renderScan() {
     const tile = (c, i) => `
       <button class="tile" data-add="${i}" aria-label="${esc(c.name)} hinzufügen">${cardImg(c)}
         <span class="name">${esc(c.name)}</span>
-        <span class="sub">${esc(c.set)}</span>
+        <span class="sub">${esc(GAMES[c.game])} · ${esc(c.set)}</span>
+        ${c.rarity ? `<span class="sub">${esc(c.rarity)}</span>` : ''}
         <span class="val">${c.price ? money.format(c.price) : 'Kein Preis'}</span>
         <span class="qty">${hasCard(c) ? 'In deiner Sammlung' : c.number ? '#' + esc(c.number) : ''}</span>
         <span class="plus ${hasCard(c) ? 'has' : ''}">${hasCard(c) ? ICON.check : ICON.plus}</span>
@@ -402,6 +402,8 @@ function renderScan() {
     body = dexHtml();
   } else {
     body = `${scanCta('Karte scannen')}
+      <div class="head"><h2>Schnellfilter</h2></div>
+      <div class="qf">${Object.entries(GAMES).map(([k, v]) => `<button class="game g-${k} ${ui.game === k ? 'on' : ''}" data-pick-game="${k}" data-target="game">${esc(v)}</button>`).join('')}</div>
       <div class="quick">${['Glurak', 'Pikachu', 'Mewtu', 'Evoli', 'Gengar', 'Lugia', 'Rayquaza'].map(q => `<button data-quick="${q}" data-quick-game="pokemon">${q}</button>`).join('')}</div>
       <div id="feedbox" data-kind="search">${feedHtml('search')}</div>
       ${ui.game === 'pokemon' ? setsHtml() : ''}`;
@@ -414,6 +416,7 @@ function renderScan() {
         <input id="q" placeholder="Karten suchen" aria-label="Kartenname" value="${esc(ui.q)}">
         ${ui.q ? `<button data-clear-search aria-label="Suche löschen">${ICON.close}</button>` : `<button data-search aria-label="Suchen">${ICON.search}</button>`}
       </div>
+      <button class="round" data-saved aria-label="Gemerkte Karten">${ICON.star}</button>
       <button class="round" data-games="game" aria-label="Spiel auswählen">${ICON.menu}</button>
     </div>
     <div class="filters">
@@ -542,7 +545,7 @@ function addToCollection(card, verified, photoHash) {
   const hist = { ...(card.hist || {}) };
   hist[today()] = card.price;
   state.cards.unshift({ ...card, hist, verified, photoHash: photoHash || null, key: crypto.randomUUID(), addedAt: Date.now() });
-  if (verified && card.buyPrice == null) logEvent('scan', card, cents(card.price));
+  if (verified && card.buyPrice == null && !card.fromServer) logEvent('scan', card, cents(card.price));
   save();
   return true;
 }
@@ -587,7 +590,8 @@ function renderPortfolio() {
     <div class="grid big stag">${shown.map(c => `
       <button class="tile" data-open="${esc(c.key)}">${cardImg(c)}
         <span class="name">${esc(c.name)}</span>
-        <span class="sub">${esc(c.set)}</span>
+        <span class="sub">${esc(GAMES[c.game])} · ${esc(c.set)}</span>
+        ${c.rarity ? `<span class="sub">${esc(c.rarity)}</span>` : ''}
         <span class="val">${money.format(c.price || 0)}</span>
         ${c.buyPrice != null ? `<span class="tag ${profitOf(c) < 0 ? 'lossTag' : 'gainTag'}">${profitOf(c) < 0 ? '-' : '+'}${eur(Math.abs(profitOf(c)))}</span>` : c.verified ? '' : '<span class="tag">Zählt nicht</span>'}
       </button>`).join('')}</div>` : scanCta('Starte deine Sammlung')}
@@ -637,9 +641,10 @@ function renderProfile() {
     <details class="facts"><summary><span>Infos</span>${ICON.chevron}</summary>
       <p>Das Guthaben ist nur eine Anzeige in der App. Du kannst es nicht abheben oder außerhalb der App ausgeben.</p>
       <p>Preise kommen von Cardmarket, TCGplayer, Scryfall und YGOPRODeck und können veraltet sein.</p>
-      <p>Gekaufte Karten sind nur digital. Zur Sammlung zählen Kamera-Scans und Käufe, Galerie-Bilder nicht.</p>
-      <p>Sammlung und Name liegen nur auf diesem Gerät. Fotos werden nicht hochgeladen.</p>
-      <p>Version 1.4.0</p>
+      <p>Gekaufte und ersteigerte Karten sind nur digital. Zur Sammlung zählen Kamera-Scans mit Echtheitsprobe und Käufe, Galerie-Bilder nicht.</p>
+      <p>Auktionen laufen nur mit App-Guthaben. Geprüft wird auf dem Gerät, von den Fotos bleibt nur ein Fingerabdruck auf dem Server.</p>
+      <p>Sammlung und Name liegen nur auf diesem Gerät. Fotos werden nie hochgeladen.</p>
+      <p>Version 1.5.0</p>
     </details>`;
 }
 
@@ -648,10 +653,189 @@ async function syncMarket() {
   try {
     const me = await market.join(state.secret);
     ui.marketReady = !!me;
-    if (me) ui.balance = me.points;
+    if (me) {
+      ui.balance = me.points;
+      await pickResults();
+      await loadAuctions();
+    }
   } catch {
     ui.marketReady = false;
   }
+}
+
+// Holt beendete Auktionen ab: gewonnene Karten, Verkaufserlöse, zurückgekommene Karten.
+let picking = false;
+async function pickResults() {
+  if (picking) return;
+  picking = true;
+  try {
+    await collectResults();
+  } finally { picking = false; }
+}
+async function collectResults() {
+  const { points, results } = await market.results(state.secret);
+  ui.balance = points;
+  if (!results.length) return;
+  for (const r of results) {
+    const fresh = r.kind === 'sold' ? null : await getCard(r.game, r.card_id).catch(() => null);
+    const card = { ...(fresh || fromListing(r)), hist: {}, fromServer: true };
+    if (r.kind === 'won') {
+      addToCollection({ ...card, wonFor: r.amount / CENTS }, true, null);
+      logEvent('kauf', card, -r.amount);
+      toast(`Auktion gewonnen: ${r.name}`);
+    } else if (r.kind === 'sold') {
+      logEvent('verkauf', card, r.amount);
+      toast(`${r.name} versteigert für ${eur(r.amount)}`);
+    } else {
+      addToCollection(card, true, null);
+      toast(`Kein Gebot: ${r.name} ist zurück in deiner Sammlung.`);
+    }
+  }
+  save();
+  await market.resultsDone(state.secret, results.map(r => r.id));
+}
+
+// Name und Bild kommen aus dem Katalog, nicht vom Anbieter. Unbekannte Karten werden nicht gezeigt.
+async function loadAuctions() {
+  const list = await market.auctions(state.secret);
+  const now = Date.now();
+  const checked = await Promise.all(list.map(async a => {
+    const fresh = await getCard(a.game, a.card_id).catch(() => undefined);
+    if (fresh === null) return null;
+    if (fresh) { a.name = fresh.name; a.image = fresh.image; a.set_name = fresh.set; a.rarity = fresh.rarity; a.market_eur = fresh.price; }
+    a.endsAt = now + a.ends_in * 1000;
+    return a;
+  }));
+  ui.auctions = checked.filter(Boolean);
+}
+
+const timeLeft = endsAt => {
+  const s = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+  if (s >= 86400) return `${Math.floor(s / 86400)} T ${Math.floor(s % 86400 / 3600)} Std`;
+  if (s >= 3600) return `${Math.floor(s / 3600)} Std ${Math.floor(s % 3600 / 60)} Min`;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+const endsSoon = a => a.endsAt - Date.now() < 3600 * 1000;
+const auctionPrice = a => a.top_bid ?? a.start_price;
+const minBid = a => (a.top_bid == null ? a.start_price : a.top_bid + Math.max(10, Math.ceil(a.top_bid * .05)));
+
+function auctionTicker(card) {
+  const a = ui.auctions.find(x => !x.mine && cardIdent({ game: x.game, id: x.card_id }) === cardIdent(card));
+  if (!a) return '';
+  return `<button class="ticker" data-auction="${esc(a.id)}">${ICON.flame}<span>${endsSoon(a) ? 'Auktion endet bald!' : 'Läuft als Auktion.'} Aktuelles Gebot: ${eur(auctionPrice(a))}</span></button>`;
+}
+
+function auctionTile(a) {
+  return `<button class="prod auc" data-auction="${esc(a.id)}">${cardImg(a)}
+    <span class="name">${esc(a.name)}</span>
+    <span class="price">${eur(auctionPrice(a))}</span>
+    <span class="sub ${endsSoon(a) ? 'down' : ''}" data-ends-at="${a.endsAt}">${timeLeft(a.endsAt)}</span></button>`;
+}
+
+function openAuction(id) {
+  const a = ui.auctions.find(x => x.id === id);
+  if (!a) { closeModal(); return; }
+  const has = hasCard({ game: a.game, id: a.card_id });
+  const least = minBid(a);
+  modal.innerHTML = `<div class="sheet">
+    <button class="back" data-close aria-label="Zurück">${ICON.back}</button>
+    ${a.image ? `<div class="holo"><img class="cardimg" src="${esc(hq(a.image))}" alt=""><span class="gloss"></span></div>` : ''}
+    ${endsSoon(a) ? `<div class="ticker">${ICON.flame}<span>Auktion endet bald! Aktuelles Gebot: ${eur(auctionPrice(a))}</span></div>` : ''}
+    <div class="detail">
+      <div><h3>${esc(a.name)}</h3>
+        <div class="muted small">${esc(GAMES[a.game])} · <span class="setname">${esc(a.set_name)}</span></div>
+        <div class="muted small">${[a.rarity, a.number && '#' + a.number].filter(Boolean).map(esc).join(' · ')}</div></div>
+      <div class="pricebox"><div class="big">${eur(auctionPrice(a))}</div>
+        <div class="muted small">${a.bid_count} ${a.bid_count === 1 ? 'Gebot' : 'Gebote'}</div></div>
+    </div>
+    <div class="aucline"><span>Endet in</span><b data-ends-at="${a.endsAt}">${timeLeft(a.endsAt)}</b></div>
+    ${a.market_eur ? `<div class="aucline"><span>Marktpreis</span><b>${money.format(a.market_eur)}</b></div>` : ''}
+    <div class="aucline"><span>Dein Guthaben</span><b>${eur(freeBalance())}</b></div>
+    ${a.mine ? `<div class="btns">${a.bid_count ? '<p class="note" style="margin:0">Deine Karte. Sie geht an das höchste Gebot.</p>' : `<button class="btn sec" data-auction-cancel="${esc(a.id)}">Auktion zurückziehen</button>`}</div>`
+      : has ? '<p class="note" style="margin:12px 0 0">Du hast diese Karte schon.</p>'
+      : `${a.leading ? '<p class="note ok" style="margin:12px 0 0">Du liegst vorn.</p>' : ''}
+        <div class="fieldwrap" style="margin-top:10px"><input class="field" id="bidValue" type="number" min="${(least / CENTS).toFixed(2)}" max="100000" step="0.01" value="${(least / CENTS).toFixed(2)}" aria-label="Dein Gebot in Euro"><span>€</span></div>
+        <div class="btns"><button class="btn" data-bid="${esc(a.id)}">Bieten</button></div>`}
+    <p class="note" style="margin:12px 0 0">Nur digitale Karte, bezahlt mit App-Guthaben. Dein Gebot wird reserviert und kommt zurück, wenn dich jemand überbietet.</p>
+  </div>`;
+  modal.hidden = false;
+  attachTilt(modal);
+}
+
+async function doBid(id) {
+  const amount = Math.round(Number(document.getElementById('bidValue').value) * CENTS);
+  try {
+    const res = await market.bid(state.secret, id, amount, Math.min(0, state.ledger));
+    ui.balance = res.points;
+    await loadAuctions();
+    toast('Gebot abgegeben.');
+    openAuction(id);
+    if (ui.tab === 'market') renderMarket();
+  } catch (e) {
+    toast(e.message);
+    await loadAuctions().catch(() => {});
+    if (!modal.hidden) openAuction(id);
+  }
+}
+
+async function doAuctionCancel(id) {
+  try {
+    const l = await market.auctionCancel(state.secret, id);
+    const fresh = await getCard(l.game, l.card_id).catch(() => null);
+    addToCollection({ ...(fresh || fromListing(l)), fromServer: true }, true, null);
+    closeModal();
+    toast('Auktion zurückgezogen.');
+    await showMarket();
+  } catch (e) { toast(e.message); }
+}
+
+// Der Server würfelt die Aufgaben der Probe und merkt sich danach, dass die Karte geprüft ist.
+async function ensureVerified(card) {
+  const start = await market.proofStart(state.secret, card);
+  if (start.verified) return true;
+  const proof = await runProof({ card, steps: start.steps });
+  if (!proof.ok) {
+    if (proof.reason) toast(proof.reason);
+    return false;
+  }
+  const res = await market.proofFinish(state.secret, start.nonce, proof.frames);
+  if (!res.verified) { toast(res.error || 'Die Probe wurde abgelehnt.'); return false; }
+  return true;
+}
+
+function openAuctionForm(key) {
+  const c = state.cards.find(x => x.key === key);
+  if (!c) return;
+  ui.auctionHours = 24;
+  modal.innerHTML = `<div class="sheet">
+    <button class="back" data-open="${esc(c.key)}" aria-label="Zurück">${ICON.back}</button>
+    <h3 class="center">Versteigern</h3>
+    <div class="hit" style="margin-top:12px">${cardImg(c)}<div class="info"><h3>${esc(c.name)}</h3><span class="muted small">${esc(c.set)}</span>
+      <span class="muted small">Marktpreis ${money.format(c.price || 0)}</span></div></div>
+    <div class="head" style="margin-top:0"><h2>Startpreis</h2></div>
+    <div class="fieldwrap"><input class="field" id="auctionStart" type="number" min="0.01" max="100000" step="0.01" value="${Math.max(0.01, (c.price || 0) * .5).toFixed(2)}" aria-label="Startpreis in Euro"><span>€</span></div>
+    <div class="head"><h2>Laufzeit</h2></div>
+    <div class="ranges hours">${[[1, '1 Std'], [24, '1 Tag'], [72, '3 Tage']].map(([h, t]) => `<button data-hours="${h}" class="${h === 24 ? 'on' : ''}">${t}</button>`).join('')}</div>
+    <div class="btns"><button class="btn" data-auction-create="${esc(c.key)}">Karte prüfen und starten</button></div>
+    <p class="note" style="margin:12px 0 0">Zum Schluss zeigst du die echte Karte vor der Kamera. Wer am meisten bietet, bekommt die digitale Karte, du das App-Guthaben.</p>
+  </div>`;
+  modal.hidden = false;
+}
+
+async function doAuctionCreate(key) {
+  const c = state.cards.find(x => x.key === key);
+  const start = Math.round(Number(document.getElementById('auctionStart').value) * CENTS);
+  if (!c) return;
+  if (!(start >= 1 && start <= 10000000)) { toast('Gib einen Startpreis von 0,01 € bis 100.000 € ein.'); return; }
+  try {
+    if (!await ensureVerified(c)) return;
+    await market.auctionCreate(state.secret, c, start, ui.auctionHours || 24);
+    state.cards = state.cards.filter(x => x.key !== key);
+    save();
+    closeModal();
+    toast('Deine Auktion läuft.');
+    switchTab('market');
+  } catch (e) { toast(e.message); }
 }
 const freeBalance = () => (ui.balance ?? START_BALANCE) + state.ledger;
 
@@ -731,6 +915,8 @@ function renderMarket() {
       <button class="round" data-games="marketGame" aria-label="Spiel auswählen">${ICON.menu}</button>
     </div>
     <div class="points"><span>Freies Guthaben <b>${eur(freeBalance())}</b></span><span>${ui.marketGame === 'all' ? '' : esc(GAMES[ui.marketGame])}</span></div>
+    ${ui.auctions.length ? `<div class="head"><h2>Auktionen</h2></div>
+      <div class="shelf stag">${ui.auctions.filter(a => (ui.marketGame === 'all' || a.game === ui.marketGame) && (!q || a.name.toLowerCase().includes(q))).map(auctionTile).join('')}</div>` : ''}
     <div class="head"><h2>Empfohlen</h2></div>
     ${featured.length ? `<div class="shelf stag">${featured.join('')}</div>` : SKELETON_SHELF}
     ${watched.length ? section('Merkliste', 'watch', watched, '') : ''}
@@ -746,7 +932,7 @@ function openListing(id) {
   const already = hasCard({ game: l.game, id: l.card_id });
   modal.innerHTML = `<div class="sheet">
     <button class="back" data-close aria-label="Zurück">${ICON.back}</button>
-    ${l.image ? `<div class="holo"><img class="cardimg" src="${esc(l.image)}" alt=""><span class="gloss"></span></div>` : ''}
+    ${l.image ? `<div class="holo"><img class="cardimg" src="${esc(hq(l.image))}" alt=""><span class="gloss"></span></div>` : ''}
     <div class="detail">
       <div><h3>${esc(l.name)}</h3>
         <div class="muted small">${esc(GAMES[l.game])} · ${esc(l.set_name)}</div>
@@ -777,7 +963,7 @@ async function showMarket() {
   }
   for (const l of ui.listings.slice(0, 30)) {
     const fresh = await getCard(l.game, l.card_id).catch(() => null);
-    if (fresh) l.market_eur = fresh.price;
+    if (fresh) { l.market_eur = fresh.price; l.name = fresh.name; l.image = fresh.image; }
     if (ui.tab !== 'market') return;
   }
   if (ui.tab === 'market') renderMarket();
@@ -797,7 +983,8 @@ async function doSell(key) {
   const price = Math.round(Number(document.getElementById('sellPrice').value) * CENTS);
   if (!c || !c.verified || !(price >= 1 && price <= 10000000)) { toast('Gib einen Preis von 0,01 € bis 100.000 € ein.'); return; }
   try {
-    await market.sell(state.secret, c, price, c.photoHash);
+    if (!await ensureVerified(c)) return;
+    await market.sell(state.secret, c, price);
     state.cards = state.cards.filter(x => x.key !== key);
     save();
     closeModal();
@@ -816,7 +1003,7 @@ async function doBuy(id) {
   try {
     const l = await market.buy(state.secret, id);
     const fresh = await getCard(l.game, l.card_id).catch(() => null);
-    addToCollection(fresh || fromListing(l), true, null);
+    addToCollection({ ...(fresh || fromListing(l)), fromServer: true }, true, null);
     state.watch = state.watch.filter(w => w !== id);
     save();
     flyToCollection(modal.querySelector('.cardimg'), '');
@@ -830,7 +1017,7 @@ async function doCancel(id) {
   try {
     const l = await market.cancel(state.secret, id);
     const fresh = await getCard(l.game, l.card_id).catch(() => null);
-    addToCollection(fresh || fromListing(l), true, l.photo_hash);
+    addToCollection({ ...(fresh || fromListing(l)), fromServer: true }, true, null);
     closeModal();
     toast(hasCard({ game: l.game, id: l.card_id }) ? 'Angebot zurückgezogen.' : 'Karte ist zurück in deiner Sammlung.');
     await showMarket();
@@ -904,7 +1091,17 @@ document.getElementById('nav').addEventListener('click', e => {
   if (b) switchTab(b.dataset.tab);
 });
 
+// Zeigt das Kartenbild groß, ein Tipp schließt es wieder.
+function openZoom(src) {
+  const box = document.createElement('div');
+  box.id = 'zoom';
+  box.innerHTML = `<img src="${esc(src)}" alt="">`;
+  box.addEventListener('click', () => box.remove());
+  document.body.appendChild(box);
+}
+
 document.addEventListener('click', e => {
+  if (e.target.classList && e.target.classList.contains('cardimg')) { openZoom(e.target.src); return; }
   const b = e.target.closest('button');
   if (!b) { if (e.target === modal) closeModal(); return; }
   if (b.closest('#live')) return;
@@ -921,6 +1118,12 @@ document.addEventListener('click', e => {
   else if (d.remove) {
     state.cards = state.cards.filter(c => c.key !== d.remove);
     save(); closeModal(); renderTab();
+  }
+  else if ('saved' in d) {
+    ui.found = state.cards.filter(c => !c.verified);
+    ui.q = ''; ui.photo = null; ui.sure = false;
+    ui.status = ui.found.length ? null : { text: 'Noch nichts gemerkt.' };
+    renderScan();
   }
   else if ('camera' in d) openLive();
   else if ('pick' in d) document.getElementById('file').click();
@@ -966,6 +1169,15 @@ document.addEventListener('click', e => {
     state.watch = state.watch.includes(d.watch) ? state.watch.filter(w => w !== d.watch) : [...state.watch, d.watch];
     save(); openListing(d.watch); renderMarket();
   }
+  else if (d.auctionForm) openAuctionForm(d.auctionForm);
+  else if (d.hours) {
+    ui.auctionHours = Number(d.hours);
+    modal.querySelectorAll('[data-hours]').forEach(x => x.classList.toggle('on', x === b));
+  }
+  else if (d.auctionCreate) doAuctionCreate(d.auctionCreate);
+  else if (d.auction) openAuction(d.auction);
+  else if (d.bid) doBid(d.bid);
+  else if (d.auctionCancel) doAuctionCancel(d.auctionCancel);
   else if (d.buy) doBuy(d.buy);
   else if (d.cancel) doCancel(d.cancel);
 });
@@ -1024,3 +1236,17 @@ enterPage(view, 1);
 moveIndicator();
 syncMarket().then(() => { if (ui.tab === 'home' && modal.hidden) renderHome(false); });
 refreshPrices();
+
+// Restzeiten laufen sichtbar weiter, offene Auktionen werden regelmäßig neu geladen.
+setInterval(() => {
+  document.querySelectorAll('[data-ends-at]').forEach(x => { x.textContent = timeLeft(Number(x.dataset.endsAt)); });
+}, 1000);
+setInterval(async () => {
+  if (!ui.marketReady || document.hidden || !['market', 'home'].includes(ui.tab) || !modal.hidden || document.getElementById('live')) return;
+  try {
+    await pickResults();
+    await loadAuctions();
+    if (ui.tab === 'market') renderMarket();
+    else paintFeed();
+  } catch { /* beim nächsten Mal wieder */ }
+}, 20000);

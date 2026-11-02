@@ -3,14 +3,20 @@ import { VISUAL_SURE, visualSearch, cardFromKey, identify, checkPhoto, loadIndex
 import { GAMES } from './cards.js';
 import { ICON } from './icons.js';
 import { cardFlight } from './fx.js';
+import { runProof, quickSteps, cameraAllowed } from './proof.js';
 
 const money = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const thumb = c => (c.image || '').replace('/high.webp', '/low.webp');
+const thumb = c => c.image || '';
 
 export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no-camera');
   const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+
+  if (!cameraAllowed(stream)) {
+    stream.getTracks().forEach(t => t.stop());
+    throw new Error('virtual-camera');
+  }
 
   const el = document.createElement('div');
   el.id = 'live';
@@ -215,6 +221,10 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
       const res = await checkPhoto(panel._blob, 'kamera', card, hashes);
       if (closed) return;
       if (res.level === 'block') { resume(res.reasons[0] || 'Foto abgelehnt.'); return; }
+      // Erst die Probe beweist, dass die echte Karte vor der Kamera liegt.
+      const proof = await runProof({ card, steps: quickSteps(), stream });
+      if (closed) return;
+      if (!proof.ok) { resume(proof.reason || 'Nicht hinzugefügt.'); return; }
       const from = panel.querySelector('.hitcard img');
       onAdd(card, res.hash, from);
       session++; sessionValue += card.price || 0;

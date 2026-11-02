@@ -129,6 +129,14 @@ export async function findByNumber(number, total) {
   return found;
 }
 
+// Größte Fassung eines Kartenbilds. Ältere gespeicherte Karten werden so ebenfalls scharf.
+export function hq(url) {
+  return (url || '')
+    .replace('/low.webp', '/high.webp')
+    .replace(/cards\.scryfall\.io\/(small|normal)\//, 'cards.scryfall.io/large/')
+    .replace('/images/cards_small/', '/images/cards/');
+}
+
 // ---------- Magic (Scryfall) ----------
 function magicCard(c) {
   const img = c.image_uris || (c.card_faces && c.card_faces[0] && c.card_faces[0].image_uris) || {};
@@ -137,7 +145,7 @@ function magicCard(c) {
   const price = num(p.eur) ?? num(p.eur_foil) ?? (usd != null ? usd * 0.9 : 0);
   return {
     game: 'magic', id: c.id, name: c.printed_name || c.name, number: String(c.collector_number || ''),
-    set: c.set_name || '', image: img.normal || img.small || '', price, hist: {},
+    set: c.set_name || '', image: img.large || img.normal || img.small || '', price, hist: {},
   };
 }
 
@@ -148,7 +156,7 @@ function yugiohCard(c) {
   const set = (c.card_sets && c.card_sets[0]) || {};
   return {
     game: 'yugioh', id: String(c.id), name: c.name, number: set.set_code || '',
-    set: set.set_name || '', image: img.image_url_small || '', price: num(prices.cardmarket_price) ?? 0, hist: {},
+    set: set.set_name || '', image: img.image_url || img.image_url_small || '', price: num(prices.cardmarket_price) ?? 0, hist: {},
   };
 }
 

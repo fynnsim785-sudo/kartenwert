@@ -575,6 +575,90 @@ details.facts p { margin: 9px 0 0; }
 .pricebox .change.down::before { content: "▼ "; }
 .pricebox .change.none::before { content: none; }
 
+/* ---------- Version 1.5: nah an den Vorlagen ---------- */
+@font-face { font-family: Lato; font-weight: 400; font-display: swap; src: url(fonts/lato-400.woff2) format("woff2"); }
+@font-face { font-family: Lato; font-weight: 700; font-display: swap; src: url(fonts/lato-700.woff2) format("woff2"); }
+@font-face { font-family: Lato; font-weight: 900; font-display: swap; src: url(fonts/lato-900.woff2) format("woff2"); }
+@font-face { font-family: Lato; font-weight: 400; font-display: swap; src: url(fonts/lato-ext-400.woff2) format("woff2"); unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0; }
+@font-face { font-family: Lato; font-weight: 700; font-display: swap; src: url(fonts/lato-ext-700.woff2) format("woff2"); unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0; }
+@font-face { font-family: Lato; font-weight: 900; font-display: swap; src: url(fonts/lato-ext-900.woff2) format("woff2"); unicode-range: U+0100-02BA, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0; }
+:root { --bg: #f7f8f8; --gold: #f2b705; }
+@media (prefers-color-scheme: dark) { :root { --bg: #000000; } }
+html, body { font-family: Lato, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+h2 { font-weight: 900; }
+.value .big { font-weight: 900; letter-spacing: -.4px; }
+.change, .item .name, .item .right { font-weight: 700; }
+.panel h2, .sheet h3 { font-weight: 900; }
+.item .sub { font-weight: 400; }
+.tabs button { font-weight: 700; }
+
+/* Runde Knöpfe in der Suche */
+.searchbar .search { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 9px 14px; }
+.round, .round.cam-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--panel); color: var(--green); border: 1px solid var(--line); }
+.searchbar .round:not(.cam-btn) { background: var(--range); color: #fff; border: 0; width: 32px; height: 32px; }
+.searchbar .round:not(.cam-btn) svg { width: 16px; height: 16px; }
+.chip { display: inline-flex; align-items: center; background: var(--soft); border-radius: 13px; padding: 4px 11px; font-size: 13px; text-decoration: none; font-weight: 700; }
+
+/* Spiele als farbige Felder */
+.qf, .games { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.game { height: 74px; border-radius: 6px; font-size: 17px; font-weight: 900; letter-spacing: -.1px; }
+.game.g-all { background: var(--ink); color: var(--on-ink); }
+.game.g-pokemon { background: #ffcb05; color: #1d4e9e; }
+.game.g-magic { background: #151515; color: #f08a24; border: 1px solid #333; }
+.game.g-yugioh { background: #a1161c; color: #ffd76a; }
+.game.on, .game.g-all.on, .game.g-pokemon.on, .game.g-magic.on, .game.g-yugioh.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--chart); }
+
+/* Entdecken mit Bild im Hintergrund */
+.promo { height: 132px; width: 276px; background: #15181a; border: 0; }
+.promobg { position: absolute; inset: -30px; background-position: center 22%; background-size: cover; filter: blur(16px) saturate(1.5) brightness(.62); transform: scale(1.1); }
+#view .promo .fan img { box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+.promo .fan { z-index: 1; }
+.promo b { text-shadow: 0 1px 3px rgba(0,0,0,.45); font-weight: 900; }
+
+/* Kacheln mit klarem Bild */
+.grid.big .tile { padding: 12px 12px 12px; }
+.grid.big .tile img { width: 88%; border-radius: 5px; }
+.grid.big .tile .name { font-weight: 900; font-size: 13.5px; }
+.grid.big .tile .sub { white-space: nowrap; }
+.grid.big .tile .val { font-weight: 700; font-size: 14px; }
+.grid.big .plus { width: 34px; height: 34px; color: var(--green); border-color: var(--line); background: var(--panel); }
+.plus.has, .grid.big .plus.has { background: var(--green); color: #fff; border-color: var(--green); }
+.tile img, .prod img, .holo .cardimg { image-rendering: auto; }
+.prod { width: 118px; }
+
+/* Kartendetail */
+.detail { position: relative; padding: 16px 16px 14px; align-items: flex-end; }
+.detail h3 { padding-right: 30px; }
+.star { position: absolute; right: 13px; top: 13px; width: 24px; height: 24px; padding: 0; background: none; border: 0; color: var(--faint); }
+.star svg { width: 100%; height: 100%; display: block; }
+.star.on { color: var(--gold); }
+.star.on svg { fill: currentColor; }
+.sheet { background: var(--bg); }
+.holo { width: 74%; max-width: 300px; cursor: zoom-in; }
+#zoom { position: fixed; inset: 0; z-index: 70; background: #000; display: grid; place-items: center; padding: 12px; cursor: zoom-out; animation: fade .12s linear; }
+#zoom img { max-width: 100%; max-height: 100%; border-radius: 12px; display: block; }
+
+/* Auktionen */
+.ticker { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; background: none; border: 0; padding: 2px 0 10px; color: var(--red); font-size: 13.5px; font-weight: 700; text-align: left; }
+.ticker svg { width: 16px; height: 16px; flex: none; }
+.aucline { display: flex; justify-content: space-between; gap: 12px; padding: 10px 2px 0; font-size: 14px; color: var(--sub); }
+.aucline b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.prod.auc .price { font-weight: 900; }
+.ranges.hours { justify-content: flex-start; gap: 8px; margin: 0 0 4px; }
+.ranges.hours button { width: auto; min-width: 72px; height: 36px; border-radius: 18px; padding: 0 14px; background: var(--soft); color: var(--text); }
+.ranges.hours button.on { background: var(--range); color: #fff; }
+
+/* Echtheitsprobe */
+#live.proof { z-index: 45; }
+.pvdots { display: flex; gap: 7px; }
+.pvdots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.35); }
+.pvdots i.on { background: #4cc2ad; }
+.pvbox { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 20px calc(18px + env(safe-area-inset-bottom)); background: #000; color: #fff; text-align: center; }
+.pvbox p { margin: 0; }
+.pvtitle { font-size: 13px; color: #a7adad; }
+.pvtext { font-size: 19px; font-weight: 900; margin-top: 3px !important; min-height: 26px; }
+.pvbox .btn { background: #fff; color: #000; margin-top: 12px; }
+.pvbox .btn[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

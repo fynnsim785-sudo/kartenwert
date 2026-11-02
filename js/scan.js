@@ -108,7 +108,9 @@ export async function hashBlob(blob) {
   return h;
 }
 
-async function hashUrl(url) {
+export const hashCanvas = c => dHash(c, c.width, c.height);
+
+export async function hashUrl(url) {
   try {
     const img = await loadImage(url);
     return dHash(img, img.naturalWidth, img.naturalHeight);

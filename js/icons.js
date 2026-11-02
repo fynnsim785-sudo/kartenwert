@@ -19,5 +19,7 @@ export const ICON = {
   book: line('<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>', 2),
   trend: line('<path d="M4 17l6-6 4 4 6-8"/><path d="M15 7h5v5"/>', 2.2),
   info: line('<circle cx="12" cy="12" r="8.500"/><path d="M12 11v5M12 8v.010"/>', 2.2),
+  flame: line('<path d="M12 3c.5 3.500 5 5.500 5 10.500a5 5 0 0 1-10 0c0-2 1-3.500 2-4.500.3 1.500 1 2.300 2 2.500C10.500 9 11 6 12 3z"/>', 2),
+  gavel: line('<path d="M13 5l6 6M10 8l6 6M11.500 6.500l-3 3M17.500 12.500l-3 3M12 12l-7.500 7.500M4 21h9"/>', 2),
   chevron: line('<path d="M9 6l6 6-6 6"/>', 2.4),
 };
