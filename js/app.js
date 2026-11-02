@@ -26,6 +26,26 @@ const ui = {
 };
 let feed = { topics: [], sets: [] };
 
+// Dieselbe Karte in einer anderen Sprache zählt als dieselbe Karte.
+function cardIdent(c) {
+  const id = String(c.id);
+  return c.game + ':' + (c.game === 'pokemon' ? id.slice(id.indexOf(':') + 1) : id);
+}
+
+// Räumt alte Doppelte auf. Gekaufte Doppelte bekommst du zum Kaufpreis zurück.
+function removeDuplicates(s) {
+  const keep = new Map();
+  for (const c of s.cards) {
+    const k = cardIdent(c), prev = keep.get(k);
+    if (!prev) { keep.set(k, c); continue; }
+    const drop = c.verified && !prev.verified ? prev : c;
+    if (drop === prev) keep.set(k, c);
+    if (drop.buyPrice != null) s.ledger += Math.round(drop.buyPrice * 100);
+  }
+  const left = new Set(keep.values());
+  s.cards = s.cards.filter(c => left.has(c));
+}
+
 function load() {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(STORE)); } catch { /* leerer Start */ }
@@ -39,6 +59,7 @@ function load() {
   s.lastRefresh = s.lastRefresh || 0;
   if (s.cards.some(c => c.game === 'pokemon' && !c.setId)) s.lastRefresh = 0; // ältere Karten ergänzen
   if (!s.secret) s.secret = crypto.randomUUID() + crypto.randomUUID();
+  removeDuplicates(s);
   return s;
 }
 function save() {
@@ -104,7 +125,8 @@ function rangeButtons(attr, current) {
   return `<div class="ranges">${['1T', '7T', '1M', '3M', '6M', 'MAX'].map(r => `<button data-${attr}="${r}" class="${r === current ? 'on' : ''}">${r}</button>`).join('')}</div>`;
 }
 const cardImg = c => c.image ? `<img src="${esc(small(c.image))}" alt="" loading="lazy">` : '<img alt="">';
-const qtyOf = card => state.cards.filter(c => c.id === card.id).length;
+const owned = card => state.cards.find(c => cardIdent(c) === cardIdent(card));
+const hasCard = card => { const have = owned(card); return !!(have && have.verified); };
 
 function openGames(target) {
   const current = { filter: ui.filter, game: ui.game, marketGame: ui.marketGame }[target];
@@ -236,7 +258,7 @@ function openCard(key) {
         <div><span>${profitOf(c) < 0 ? 'Verlust' : 'Gewinn'}</span><b>${profitOf(c) < 0 ? '-' : '+'}${eur(Math.abs(profitOf(c)))}</b></div>
       </div>
       <div class="btns"><button class="btn" data-sell-back="${esc(c.key)}"><span>Verkaufen · ${money.format(c.price || 0)}</span></button></div>`
-      : `<p class="note ${c.verified ? 'ok' : 'warn'}" style="margin:0">${c.verified ? 'Gescannt. Anzahl: ' + state.cards.filter(x => x.id === c.id && x.verified).length : 'Zählt nicht. Scanne oder kaufe die Karte.'}</p>`}
+      : `<p class="note ${c.verified ? 'ok' : 'warn'}" style="margin:0">${c.verified ? 'Gescannt' : 'Zählt nicht. Scanne oder kaufe die Karte.'}</p>`}
     ${c.verified && c.buyPrice == null && ui.marketReady ? `<div class="head"><h2>Verkaufen</h2></div>
       <div class="fieldwrap"><input class="field" id="sellPrice" type="number" min="0.01" max="100000" step="0.01" value="${Math.max(0.01, c.price || 0).toFixed(2)}" aria-label="Preis in Euro"><span>€</span></div>
       <div class="btns"><button class="btn" data-sell="${esc(c.key)}">Anbieten</button></div>` : ''}
@@ -248,6 +270,8 @@ function openCard(key) {
 
 // Zeigt eine Karte, die noch nicht in der Sammlung ist.
 function openPreview(card, note) {
+  const have = owned(card);
+  if (have && have.verified) { openCard(have.key); return; }
   ui.preview = card;
   modal.innerHTML = `<div class="sheet">
     <button class="back" data-close aria-label="Zurück">${ICON.back}</button>
@@ -263,7 +287,7 @@ function openPreview(card, note) {
     <div class="btns">
       ${card.price ? `<button class="btn buy" data-buy-card ${cents(card.price) > freeBalance() ? 'disabled' : ''}>${cents(card.price) > freeBalance() ? 'Nicht genug Guthaben' : `Kaufen`}</button>` : ''}
       <button class="btn sec" data-go-scan>Scannen</button>
-      <button class="btn ghostbtn" data-add-preview>Merken</button>
+      ${have ? '' : '<button class="btn ghostbtn" data-add-preview>Merken</button>'}
     </div></div>`;
   modal.hidden = false;
   attachTilt(modal);
@@ -336,8 +360,8 @@ function renderScan() {
         <span class="name">${esc(c.name)}</span>
         <span class="sub">${esc(c.set)}</span>
         <span class="val">${c.price ? money.format(c.price) : 'Kein Preis'}</span>
-        <span class="qty">${c.number ? '#' + esc(c.number) + ' · ' : ''}Anz. ${qtyOf(c)}</span>
-        <span class="plus">${ICON.plus}</span>
+        <span class="qty">${hasCard(c) ? 'In deiner Sammlung' : c.number ? '#' + esc(c.number) : ''}</span>
+        <span class="plus ${hasCard(c) ? 'has' : ''}">${hasCard(c) ? ICON.check : ICON.plus}</span>
       </button>`;
     const top = ui.found[0];
     body = ui.sure ? `
@@ -345,7 +369,7 @@ function renderScan() {
         <div class="info"><span class="tagline">Erkannt</span><h3>${esc(top.name)}</h3>
           <span class="muted small">${esc(top.set)}${top.number ? ' · #' + esc(top.number) : ''}</span>
           <span class="price">${top.price ? money.format(top.price) : 'Kein Preis'}</span>
-          <button class="btn" data-add="0">Hinzufügen</button></div>
+          ${hasCard(top) ? '<button class="btn sec" disabled>In deiner Sammlung</button>' : '<button class="btn" data-add="0">Hinzufügen</button>'}</div>
       </div>
       ${ui.found.length > 1 ? `<div class="head" style="margin-top:0"><h2>Andere Versionen</h2></div>
       <div class="grid stag">${ui.found.slice(1).map((c, i) => tile(c, i + 1)).join('')}</div>` : ''}`
@@ -422,8 +446,9 @@ async function openLive() {
     await openScanner({
       game: ui.game,
       hashes: state.hashes,
+      hasCard,
       onAdd(card, hash, img) {
-        addToCollection(card, true, hash);
+        if (!addToCollection(card, true, hash)) return;
         state.hashes.push(hash);
         save();
         flyToCollection(img, '+' + money.format(card.price || 0));
@@ -487,16 +512,23 @@ async function manualSearch() {
 }
 
 function addToCollection(card, verified, photoHash) {
+  const have = owned(card);
+  if (have) {
+    if (have.verified || !verified) return false;
+    state.cards = state.cards.filter(c => c !== have); // aus gemerkt wird gezählt
+  }
   const hist = { ...(card.hist || {}) };
   hist[today()] = card.price;
   state.cards.unshift({ ...card, hist, verified, photoHash: photoHash || null, key: crypto.randomUUID(), addedAt: Date.now() });
   if (verified && card.buyPrice == null) logEvent('scan', card, cents(card.price));
   save();
+  return true;
 }
 
 async function addFound(i, from) {
   const card = ui.found[i];
   if (!card) return;
+  if (hasCard(card)) { openPreview(card, ''); return; }
   // Ohne Foto gibt es nichts zu prüfen: Dann kann man die Karte kaufen oder merken.
   if (!ui.photo) { openPreview(card, ''); return; }
   const res = await checkPhoto(ui.photo, ui.source, card, state.hashes);
@@ -585,7 +617,7 @@ function renderProfile() {
       <p>Preise kommen von Cardmarket, TCGplayer, Scryfall und YGOPRODeck und können veraltet sein.</p>
       <p>Gekaufte Karten sind nur digital. Zur Sammlung zählen Kamera-Scans und Käufe, Galerie-Bilder nicht.</p>
       <p>Sammlung und Name liegen nur auf diesem Gerät. Fotos werden nicht hochgeladen.</p>
-      <p>Version 1.3.0</p>
+      <p>Version 1.3.1</p>
     </details>`;
 }
 
@@ -611,6 +643,7 @@ const profitOf = c => (c.buyPrice != null ? cents(c.price) - cents(c.buyPrice) :
 async function buyCard(from) {
   const seen = ui.preview;
   if (!seen) return;
+  if (hasCard(seen)) { toast('Du hast diese Karte schon.'); return; }
   const fresh = await getCard(seen.game, seen.id).catch(() => null) || seen;
   const price = cents(fresh.price);
   if (!price) { toast('Für diese Karte gibt es keinen Preis.'); return; }
@@ -688,6 +721,7 @@ function openListing(id) {
   const l = ui.listings.find(x => x.id === id);
   if (!l) return;
   const watching = state.watch.includes(id);
+  const already = hasCard({ game: l.game, id: l.card_id });
   modal.innerHTML = `<div class="sheet">
     <button class="back" data-close aria-label="Zurück">${ICON.back}</button>
     ${l.image ? `<div class="holo"><img class="cardimg" src="${esc(l.image)}" alt=""><span class="gloss"></span></div>` : ''}
@@ -700,7 +734,7 @@ function openListing(id) {
     </div>
     <p class="note">Nur digitale Karte. Bezahlt wird mit deinem App-Guthaben (${eur(freeBalance())}).</p>
     <div class="btns">
-      ${l.mine ? `<button class="btn sec" data-cancel="${esc(l.id)}">Angebot zurückziehen</button>` : `<button class="btn" data-buy="${esc(l.id)}" ${l.price > freeBalance() ? 'disabled' : ''}>${l.price > freeBalance() ? 'Nicht genug Guthaben' : 'Kaufen'}</button>`}
+      ${l.mine ? `<button class="btn sec" data-cancel="${esc(l.id)}">Angebot zurückziehen</button>` : `<button class="btn" data-buy="${esc(l.id)}" ${already || l.price > freeBalance() ? 'disabled' : ''}>${already ? 'In deiner Sammlung' : l.price > freeBalance() ? 'Nicht genug Guthaben' : 'Kaufen'}</button>`}
       ${l.mine ? '' : `<button class="btn sec" data-watch="${esc(l.id)}">${watching ? 'Von Merkliste entfernen' : 'Merken'}</button>`}
     </div></div>`;
   modal.hidden = false;
@@ -755,6 +789,8 @@ function fromListing(l) {
 }
 
 async function doBuy(id) {
+  const wanted = ui.listings.find(x => x.id === id);
+  if (wanted && hasCard({ game: wanted.game, id: wanted.card_id })) { toast('Du hast diese Karte schon.'); return; }
   try {
     const l = await market.buy(state.secret, id);
     const fresh = await getCard(l.game, l.card_id).catch(() => null);
@@ -774,7 +810,7 @@ async function doCancel(id) {
     const fresh = await getCard(l.game, l.card_id).catch(() => null);
     addToCollection(fresh || fromListing(l), true, l.photo_hash);
     closeModal();
-    toast('Karte ist zurück in deiner Sammlung.');
+    toast(hasCard({ game: l.game, id: l.card_id }) ? 'Angebot zurückgezogen.' : 'Karte ist zurück in deiner Sammlung.');
     await showMarket();
   } catch (e) { toast(e.message); }
 }

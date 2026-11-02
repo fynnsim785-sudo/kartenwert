@@ -8,7 +8,7 @@ const money = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const thumb = c => (c.image || '').replace('/high.webp', '/low.webp');
 
-export async function openScanner({ game, hashes, onAdd, onGallery }) {
+export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no-camera');
   const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
 
@@ -123,8 +123,8 @@ export async function openScanner({ game, hashes, onAdd, onGallery }) {
         <h3>${esc(top.name)}</h3>
         <span class="muted small">${esc(top.set)}${top.number ? ' · #' + esc(top.number) : ''}</span>
         <b class="hitprice">${top.price ? money.format(top.price) : 'Kein Preis'}</b>
-        <button class="btn" data-live="add">Hinzufügen</button>
-        <button class="livelink dark" data-live="skip">Falsche Karte</button>
+        ${hasCard(top) ? '<button class="btn" data-live="skip">Hast du schon · Weiter</button>' : '<button class="btn" data-live="add">Hinzufügen</button>'}
+        ${hasCard(top) ? '' : '<button class="livelink dark" data-live="skip">Falsche Karte</button>'}
       </div>
       ${cards.length > 1 ? `<div class="hitothers">${cards.slice(1).map((c, i) => `<button data-live="swap" data-i="${i + 1}"><img src="${esc(thumb(c))}" alt="${esc(c.set)}"></button>`).join('')}</div>` : ''}`;
     panel.hidden = false;
@@ -210,6 +210,7 @@ export async function openScanner({ game, hashes, onAdd, onGallery }) {
     }
     if (what === 'add') {
       const card = panel._cards[0];
+      if (hasCard(card)) { resume('Du hast diese Karte schon.'); return; }
       b.disabled = true;
       const res = await checkPhoto(panel._blob, 'kamera', card, hashes);
       if (closed) return;

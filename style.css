@@ -463,6 +463,8 @@ details.facts summary svg { width: 16px; height: 16px; color: var(--faint); tran
 details.facts[open] summary svg { transform: rotate(90deg); }
 details.facts p { margin: 9px 0 0; }
 
+.plus.has { background: var(--ink); color: #fff; border-color: var(--ink); }
+
 /* Live-Scanner */
 #live { background: #000; animation: none; }
 .frame { left: 50%; top: 44%; width: min(76vw, 56vh, 350px); border-radius: 8px; box-shadow: 0 0 0 200vmax rgba(0,0,0,.55); transition: none; }
