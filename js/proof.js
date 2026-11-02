@@ -2,6 +2,7 @@
 // Ein Bild auf einem Monitor oder ein Foto aus dem Internet kann das nicht.
 import { hashCanvas, identify } from './scan.js';
 import { MATCH_SURE, readRegion, compareCard } from './match.js';
+import { screenScore, SCREEN_LIMIT } from './screen.js';
 import { ICON } from './icons.js';
 
 const TEXT = {
@@ -14,7 +15,8 @@ const TEXT = {
 };
 const MOVES = ['tilt_left', 'tilt_right', 'rotate_left', 'rotate_right', 'near'];
 const VIRTUAL = /obs|virtual|manycam|snap camera|xsplit|vmix|ndi|splitcam|e2esoft|camtwist|mmhmm|fake/i;
-const STEP_LIMIT = 25000;
+const STEP_LIMIT = 35000;
+const SHOW_VALUES = new URLSearchParams(location.search).has('pruef');
 const AW = 160, AH = 224, WIDEN = 1.7; // Auswertung in einem Ausschnitt, der größer ist als der Rahmen
 const GRID_X = 26, GRID_Y = 36;
 
@@ -112,10 +114,10 @@ function makeTracker(cw, ch) {
 }
 
 // Prüft die Farbe der Rückseite: Pokémon blau, Magic und Yu-Gi-Oh! braun.
-function looksLikeBack(card, r, g, b) {
+function looksLikeBack(card, colors) {
   const old = String(card.id || '').startsWith('ja:');
-  if (card.game === 'pokemon') return b >= r - 5 || (old && r > b + 10);
-  return r >= b + 6 && g >= b - 5;
+  if (card.game === 'pokemon') return colors.blue >= .15 || (old && colors.brown >= .15);
+  return colors.brown >= .15;
 }
 
 function reached(step, pose) {
@@ -128,9 +130,9 @@ function reached(step, pose) {
 }
 
 // Passt das Kamerabild wirklich zur Karte, die geprüft werden soll? Ohne Bestätigung gilt: nein.
-async function sameCard(card, video, r) {
+async function sameCard(card, video, r, limit = MATCH_SURE) {
   const res = await compareCard(readRegion(video, r), card.image);
-  if (res) return res.blocks >= MATCH_SURE;
+  if (res) return res.blocks >= limit;
   // Yu-Gi-Oh!-Bilder lassen sich nicht auslesen: Dann muss die Texterkennung genau diese Karte finden.
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.round(r.w)); c.height = Math.max(1, Math.round(r.h));
@@ -190,7 +192,7 @@ export async function runProof({ card, steps, stream }) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const gray = new Float32Array(AW * AH);
   let prev = null;
-  let colors = { r: 0, g: 0, b: 0 };
+  let colors = { blue: 0, brown: 0 };
 
   function frameRect() {
     const v = video.getBoundingClientRect(), f = frame.getBoundingClientRect();
@@ -209,24 +211,27 @@ export async function runProof({ card, steps, stream }) {
     const a = regionOf(frameRect());
     ctx.drawImage(video, a.x, a.y, a.w, a.h, 0, 0, AW, AH);
     const d = ctx.getImageData(0, 0, AW, AH).data;
-    let moved = 0, sum = 0, sq = 0, cr = 0, cg = 0, cb = 0, cn = 0, en = 0;
+    let moved = 0, sum = 0, sq = 0, blue = 0, brown = 0, cn = 0;
+    // Die Karte kann kleiner im Rahmen liegen, deshalb zählt der Farbanteil in der ganzen Mitte.
     const x0 = AW * .3, x1 = AW * .7, y0 = AH * .3, y1 = AH * .7;
-    // Die Rückseite hat in der Mitte ein Motiv, ihre Grundfarbe zeigen die Seitenränder der Karte.
-    const edgeTop = AH * .24, edgeBottom = AH * .76;
     for (let i = 0, y = 0; y < AH; y++) {
       for (let x = 0; x < AW; x++, i++) {
         const p = i * 4;
         const v = d[p] * .3 + d[p + 1] * .59 + d[p + 2] * .11;
         if (prev) moved += Math.abs(v - prev[i]);
         gray[i] = v;
-        if (x > x0 && x < x1 && y > y0 && y < y1) { sum += v; sq += v * v; cn++; }
-        if (y > edgeTop && y < edgeBottom && ((x > AW * .23 && x < AW * .3) || (x > AW * .7 && x < AW * .77))) { cr += d[p]; cg += d[p + 1]; cb += d[p + 2]; en++; }
+        if (x > x0 && x < x1 && y > y0 && y < y1) {
+          sum += v; sq += v * v; cn++;
+          const red = d[p], green = d[p + 1], bl = d[p + 2];
+          if (bl > red + 6 && bl >= green - 8) blue++;
+          if (red > bl + 12 && red >= green && green > bl - 6) brown++;
+        }
       }
     }
     prev = prev || new Float32Array(AW * AH);
     prev.set(gray);
-    colors = { r: cr / en, g: cg / en, b: cb / en };
-    return { variance: sq / cn - (sum / cn) ** 2, motion: moved / (AW * AH) };
+    colors = { blue: blue / cn, brown: brown / cn };
+    return { variance: sq / cn - (sum / cn) ** 2, motion: moved / (AW * AH), light: sum / cn };
   }
   // Fingerabdruck mit etwas Umgebung, damit zwei Besitzer derselben Karte verschiedene Werte haben.
   function snapHash() {
@@ -236,6 +241,26 @@ export async function runProof({ card, steps, stream }) {
     c.width = 320; c.height = Math.round(320 * a.h / a.w);
     c.getContext('2d').drawImage(video, a.x, a.y, a.w, a.h, 0, 0, c.width, c.height);
     return hashCanvas(c);
+  }
+
+  // Ein Bildschirm leuchtet selbst: Das Handylicht macht ihn kaum heller, eine echte Karte deutlich.
+  async function torchTest(track) {
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (!caps.torch) return null;
+    const settings = track.getSettings ? track.getSettings() : {};
+    if (settings.torch) return null;
+    try {
+      const before = read().light;
+      await track.applyConstraints({ advanced: [{ torch: true }] });
+      let top = before;
+      for (let i = 0; i < 12; i++) {
+        await new Promise(r => setTimeout(r, 70));
+        top = Math.max(top, read().light);
+      }
+      await track.applyConstraints({ advanced: [{ torch: false }] });
+      prev = null;
+      return { rise: (top - before) / (before + 1), before };
+    } catch { return null; }
   }
 
   // Bewegt sich das Handy statt der Karte, sagt der Lagesensor das.
@@ -276,6 +301,15 @@ export async function runProof({ card, steps, stream }) {
       const tracker = makeTracker(r0.w / regionOf(r0).w * AW, r0.h / regionOf(r0).h * AH);
       let phase = 'hold', stepIndex = 0, calm = 0, streak = 0, ticks = 0, phaseAt = Date.now();
       let liveDiff = 0, liveCount = 0, busy = false, wrong = 0;
+      const screens = [];
+      const valuesEl = SHOW_VALUES ? el.querySelector('.pvtitle') : null;
+      // Mehrere Bilder müssen übereinstimmen, damit ein einzelner Glanz niemanden aussperrt.
+      const looksLikeScreen = () => screens.length >= 6 && screens.filter(v => v >= SCREEN_LIMIT).length >= screens.length * .6;
+      const measureScreen = () => {
+        const v = screenScore(video, frameRect());
+        if (v != null) screens.push(v);
+        if (valuesEl && v != null) valuesEl.dataset.v = v.toFixed(1);
+      };
 
       const say = (title, text) => {
         if (titleEl.textContent !== title) titleEl.textContent = title;
@@ -295,10 +329,15 @@ export async function runProof({ card, steps, stream }) {
         try {
           ticks++;
           const { variance, motion } = read();
+          if (ticks % 2 === 0 && phase !== 'final' && !(phase === 'step' && steps[stepIndex] === 'flip')) measureScreen();
+          if (looksLikeScreen()) {
+            finish({ ok: false, reason: 'Das ist ein Bildschirm. Zeig die echte Karte.' });
+            return;
+          }
           if (phase === 'final') {
             // Zum Schluss muss wieder genau diese Karte gerade im Rahmen zu sehen sein.
             say(`Schritt ${stepIndex + 1} von ${steps.length}`, 'Halte die Vorderseite gerade in den Rahmen');
-            if (await sameCard(card, video, frameRect())) {
+            if (await sameCard(card, video, frameRect(), MATCH_SURE - .1)) {
               dots.forEach(d => d.classList.add('on'));
               finish({ ok: true, frames });
             } else if (Date.now() - phaseAt > 9000) {
@@ -327,6 +366,13 @@ export async function runProof({ card, steps, stream }) {
               calm = 4;
               return;
             }
+            const track = stream.getVideoTracks()[0];
+            say('Karte wird geprüft', 'Das Licht blitzt kurz auf.');
+            const flash = await torchTest(track);
+            if (flash && flash.rise < .02 && flash.before < 200) {
+              finish({ ok: false, reason: 'Das ist ein Bildschirm. Zeig die echte Karte.' });
+              return;
+            }
             read();
             tracker.setReference(gray);
             frames.push(snapHash());
@@ -334,11 +380,13 @@ export async function runProof({ card, steps, stream }) {
             return;
           }
           const step = steps[stepIndex];
-          const res = tracker.track(gray, ticks % 3 === 0);          dots.forEach((d, i) => d.classList.toggle('on', i < stepIndex));
+          // Beim Umdrehen nicht im ganzen Bild suchen: Sonst findet sich auf der Rückseite ein scheinbar passendes Muster.
+          const res = tracker.track(gray, ticks % 3 === 0 && !(step === 'flip' && phase === 'step'));          dots.forEach((d, i) => d.classList.toggle('on', i < stepIndex));
           if (step === 'flip') {
             if (phase === 'step') {
               say(`Schritt ${stepIndex + 1} von ${steps.length}`, TEXT.flip);
-              if (res.score < .5 && variance > 60 && looksLikeBack(card, colors.r, colors.g, colors.b)) {
+              if (Date.now() - phaseAt > 7000) say(`Schritt ${stepIndex + 1} von ${steps.length}`, 'Halte die Rückseite ganz in den Rahmen');
+              if (res.score < .55 && variance > 40 && looksLikeBack(card, colors)) {
                 if (++streak >= 3) {
                   frames.push(snapHash());
                   streak = 0;

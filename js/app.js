@@ -134,10 +134,19 @@ const cardImg = c => c.image ? `<img src="${esc(hq(c.image))}" alt="" loading="l
 const owned = card => state.cards.find(c => cardIdent(c) === cardIdent(card));
 const hasCard = card => { const have = owned(card); return !!(have && have.verified); };
 
+// Feld für ein Spiel: Farbe des Spiels, davor echte Kartenbilder aus dem Katalog.
+function gameTile(key, name, target, on) {
+  const cards = key === 'all' ? [] : (feed.topics.filter(t => t.game === key).flatMap(t => t.cards).filter(c => c.image).sort((a, b) => (b.price || 0) - (a.price || 0)).slice(0, 3));
+  return `<button class="game g-${key} ${on ? 'on' : ''}" data-pick-game="${key}" data-target="${target}">
+    <b>${esc(name)}</b>
+    <span class="gamefan">${cards.map(c => `<img src="${esc(hq(c.image))}" alt="" loading="lazy">`).join('')}</span>
+  </button>`;
+}
+
 function openGames(target) {
   const current = { filter: ui.filter, game: ui.game, marketGame: ui.marketGame }[target];
   const withAll = target !== 'game';
-  const tile = (key, name) => `<button class="game g-${key} ${current === key ? 'on' : ''}" data-pick-game="${key}" data-target="${target}">${esc(name)}</button>`;
+  const tile = (key, name) => gameTile(key, name, target, current === key);
   modal.innerHTML = `<div class="sheet"><h3 class="center">Spiel auswählen</h3>
     <div class="games">${withAll ? tile('all', 'Alle Karten') : ''}${Object.entries(GAMES).map(([k, v]) => tile(k, v)).join('')}</div>
     <div class="btns"><button class="btn sec" data-close>Schließen</button></div></div>`;
@@ -184,6 +193,8 @@ function feedHtml(kind) {
 function paintFeed() {
   const box = document.getElementById('feedbox');
   if (box) box.innerHTML = feedHtml(box.dataset.kind);
+  const qf = document.getElementById('qfbox');
+  if (qf) qf.innerHTML = Object.entries(GAMES).map(([k, v]) => gameTile(k, v, 'game', ui.game === k)).join('');
 }
 let feedTimer = null;
 function feedChanged() {
@@ -403,7 +414,7 @@ function renderScan() {
   } else {
     body = `${scanCta('Karte scannen')}
       <div class="head"><h2>Schnellfilter</h2></div>
-      <div class="qf">${Object.entries(GAMES).map(([k, v]) => `<button class="game g-${k} ${ui.game === k ? 'on' : ''}" data-pick-game="${k}" data-target="game">${esc(v)}</button>`).join('')}</div>
+      <div class="qf" id="qfbox">${Object.entries(GAMES).map(([k, v]) => gameTile(k, v, 'game', ui.game === k)).join('')}</div>
       <div class="quick">${['Glurak', 'Pikachu', 'Mewtu', 'Evoli', 'Gengar', 'Lugia', 'Rayquaza'].map(q => `<button data-quick="${q}" data-quick-game="pokemon">${q}</button>`).join('')}</div>
       <div id="feedbox" data-kind="search">${feedHtml('search')}</div>
       ${ui.game === 'pokemon' ? setsHtml() : ''}`;
@@ -644,7 +655,7 @@ function renderProfile() {
       <p>Gekaufte und ersteigerte Karten sind nur digital. Zur Sammlung zählen Kamera-Scans mit Echtheitsprobe und Käufe, Galerie-Bilder nicht.</p>
       <p>Auktionen laufen nur mit App-Guthaben. Geprüft wird auf dem Gerät, von den Fotos bleibt nur ein Fingerabdruck auf dem Server.</p>
       <p>Sammlung und Name liegen nur auf diesem Gerät. Fotos werden nie hochgeladen.</p>
-      <p>Version 1.5.1</p>
+      <p>Version 1.5.2</p>
     </details>`;
 }
 

@@ -242,7 +242,16 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
       // Erst die Probe beweist, dass die echte Karte vor der Kamera liegt.
       const proof = await runProof({ card, steps: quickSteps(), stream });
       if (closed) return;
-      if (!proof.ok) { resume(proof.reason || 'Nicht hinzugefügt.'); return; }
+      // Das Fenster bleibt offen: So ist der Grund zu lesen und ein neuer Versuch geht sofort.
+      if (!proof.ok) {
+        b.disabled = false;
+        b.textContent = 'Nochmal versuchen';
+        if (proof.reason) {
+          const note = panel.querySelector('.hitnote') || panel.querySelector('.hitinfo').appendChild(Object.assign(document.createElement('p'), { className: 'hitnote' }));
+          note.textContent = proof.reason;
+        }
+        return;
+      }
       const from = panel.querySelector('.hitcard img');
       onAdd(card, res.hash, from);
       session++; sessionValue += card.price || 0;

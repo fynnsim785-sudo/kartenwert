@@ -653,6 +653,33 @@ h2 { font-weight: 900; }
 .langs button { flex: 1; min-width: 0; background: var(--soft); border: 0; border-radius: 14px; padding: 6px 4px; font-size: 13px; font-weight: 700; color: var(--text); }
 .langs button.on { background: var(--range); color: #fff; }
 
+.hitnote { margin: 6px 0 0; color: var(--red); font-size: 13px; font-weight: 700; }
+.pvtitle[data-v]::after { content: " · " attr(data-v); }
+
+/* Spiele mit echten Kartenbildern */
+.qf, .games { grid-template-columns: 1fr 1fr; gap: 10px; }
+.game, .game.g-all { position: relative; overflow: hidden; height: 112px; border: 0; border-radius: 10px; padding: 12px 14px; display: flex; align-items: flex-end; text-align: left; font-size: 18px; font-weight: 900; letter-spacing: -.2px; }
+.game b { position: relative; z-index: 1; font-weight: 900; max-width: 58%; line-height: 1.1; }
+.game.g-pokemon { background: #2a5bc7; color: #fff; }
+.game.g-magic { background: #2b2118; color: #f3d9a4; border: 0; }
+.game.g-yugioh { background: #6d1420; color: #ffe08a; }
+.game.g-all { background: var(--ink); color: var(--on-ink); }
+.qf .game:first-child, .games .game:first-child { grid-column: 1 / -1; height: 128px; font-size: 22px; }
+.gamefan { position: absolute; right: 6px; top: 10px; bottom: 0; width: 56%; pointer-events: none; }
+.gamefan img { position: absolute; top: 0; right: 0; height: 128%; aspect-ratio: 5/7; object-fit: cover; border-radius: 5px; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+.gamefan img:nth-child(1) { right: 34%; transform: rotate(-11deg); top: 8%; }
+.gamefan img:nth-child(2) { right: 16%; transform: rotate(-3deg); top: 3%; }
+.gamefan img:nth-child(3) { right: -2%; transform: rotate(6deg); top: 7%; }
+.game.on, .game.g-all.on, .game.g-pokemon.on, .game.g-magic.on, .game.g-yugioh.on { box-shadow: inset 0 0 0 3px #fff, 0 0 0 2px var(--chart); }
+
+.game b { text-shadow: 0 1px 3px rgba(0,0,0,.45); }
+.qf .game:not(:first-child) .gamefan, .games .game:not(:first-child) .gamefan { width: 46%; right: 2px; top: 8px; }
+.qf .game:not(:first-child) .gamefan img:nth-child(3), .games .game:not(:first-child) .gamefan img:nth-child(3) { display: none; }
+.qf .game:not(:first-child) .gamefan img, .games .game:not(:first-child) .gamefan img { height: 118%; }
+.qf .game:not(:first-child) .gamefan img:nth-child(1), .games .game:not(:first-child) .gamefan img:nth-child(1) { right: 24%; }
+.qf .game:not(:first-child) .gamefan img:nth-child(2), .games .game:not(:first-child) .gamefan img:nth-child(2) { right: 0; }
+.qf .game:not(:first-child) b, .games .game:not(:first-child) b { max-width: 54%; font-size: 16px; }
+
 /* Echtheitsprobe */
 #live.proof { z-index: 45; }
 .pvdots { display: flex; gap: 7px; }
