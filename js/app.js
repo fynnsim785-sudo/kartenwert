@@ -108,6 +108,7 @@ function changeHtml(ch, label) {
   if (!ch) return '<div class="change none">Noch keine Preisänderung</div>';
   return `<div class="change ${ch.diff < 0 ? 'down' : ''}">${ch.diff < 0 ? '-' : '+'}${eur(Math.abs(ch.diff))} ${label}</div>`;
 }
+let chartCount = 0;
 function chartSvg(points) {
   const W = 500, H = 270;
   const vals = points.map(p => p.v);
@@ -117,8 +118,12 @@ function chartSvg(points) {
   const xy = list.map((p, i) => [i / (list.length - 1) * W, H * .85 - (p.v - min) / (max - min) * (H * .72)]);
   const line = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
   const lastY = xy[xy.length - 1][1] / H * 100;
+  const color = list[list.length - 1].v < list[0].v ? 'var(--red)' : 'var(--chart)';
+  const fillId = `chartfill${++chartCount}`;
   return `<div class="chartwrap"><svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Wertverlauf">
-    <path d="${line}" fill="none" stroke="${list[list.length - 1].v < list[0].v ? '#d92d20' : '#00875a'}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>
+    <defs><linearGradient id="${fillId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${color};stop-opacity:.55"/><stop offset="1" style="stop-color:${color};stop-opacity:0"/></linearGradient></defs>
+    <path d="${line} L${W} ${H} L0 ${H} Z" fill="url(#${fillId})"/>
+    <path d="${line}" fill="none" style="stroke:${color}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>
     <i class="chartdot" style="top:${lastY.toFixed(1)}%"></i></div>`;
 }
 function rangeButtons(attr, current) {
@@ -131,7 +136,14 @@ const hasCard = card => { const have = owned(card); return !!(have && have.verif
 function openGames(target) {
   const current = { filter: ui.filter, game: ui.game, marketGame: ui.marketGame }[target];
   const withAll = target !== 'game';
-  const tile = (key, name) => `<button class="game ${current === key ? 'on' : ''}" data-pick-game="${key}" data-target="${target}">${esc(name)}</button>`;
+  const artOf = key => {
+    const topic = feed.topics.find(t => t.game === key && t.cards.some(c => c.image));
+    return topic ? topic.cards.find(c => c.image).image : null;
+  };
+  const tile = (key, name) => {
+    const art = artOf(key);
+    return `<button class="game ${art ? 'art' : ''} ${current === key ? 'on' : ''}" ${art ? `style="--art:url('${esc(small(art))}')"` : ''} data-pick-game="${key}" data-target="${target}">${esc(name)}</button>`;
+  };
   modal.innerHTML = `<div class="sheet"><h3 class="center">Spiel auswählen</h3>
     <div class="games">${withAll ? tile('all', 'Alle Karten') : ''}${Object.entries(GAMES).map(([k, v]) => tile(k, v)).join('')}</div>
     <div class="btns"><button class="btn sec" data-close>Schließen</button></div></div>`;
@@ -156,11 +168,20 @@ function topicShelf(t) {
   return `<div class="head"><h2>${esc(t.title)}</h2><button class="link" data-quick="${esc(t.q)}" data-quick-game="${esc(t.game)}">Alle</button></div>
     <div class="shelf stag">${t.cards.map(feedTile).join('')}</div>`;
 }
+function promoShelf() {
+  const topics = feed.topics.filter(t => t.cards.some(c => c.image));
+  if (!topics.length) return '';
+  return `<div class="head"><h2>Entdecken</h2></div>
+    <div class="shelf stag">${topics.map(t => `<button class="promo" data-quick="${esc(t.q)}" data-quick-game="${esc(t.game)}">
+      <b>${esc(t.title)}</b>
+      <span class="fan">${t.cards.filter(c => c.image).slice(0, 3).map(c => `<img src="${esc(small(c.image))}" alt="" loading="lazy">`).join('')}</span>
+    </button>`).join('')}</div>`;
+}
 function feedHtml(kind) {
   const top = topCards(feed, 10);
   const topBlock = top.length ? `<div class="head"><h2>Am teuersten</h2></div><div class="shelf stag">${top.map(feedTile).join('')}</div>`
     : `<div class="head"><h2>Am teuersten</h2></div>${SKELETON_SHELF}`;
-  if (kind === 'home') return topBlock + setsShelf() + feed.topics.slice(0, 3).map(topicShelf).join('');
+  if (kind === 'home') return promoShelf() + topBlock + setsShelf() + feed.topics.slice(0, 3).map(topicShelf).join('');
   if (kind === 'search') return topBlock;
   if (kind === 'market') return feed.topics.map(topicShelf).join('') || SKELETON_SHELF;
   return setsShelf() + topBlock;
@@ -200,7 +221,7 @@ function renderHome(animate = true) {
       <span class="pill"><i>€</i>EUR</span>
     </div>
     <section class="value">
-      <div class="label">Guthaben · <button class="link" data-games="filter">${portfolioName}</button></div>
+      <div class="label">Portfolio: <button class="link" data-games="filter">${portfolioName}</button></div>
       <div class="big" id="total">${eur(ui.shown)}</div>
       ${cards.length ? changeHtml(change(points), LABEL[ui.range]) : ''}
       ${cards.length && ui.filter === 'all' ? `<div class="split"><span>Karten <b>${eur(value)}</b></span><span>Frei <b>${eur(freeBalance())}</b></span>${cards.some(c => c.buyPrice != null) ? (p => `<span>${p < 0 ? 'Verlust' : 'Gewinn'} <b class="${p < 0 ? 'down' : 'up'}">${p < 0 ? '-' : '+'}${eur(Math.abs(p))}</b></span>`)(cards.reduce((s, c) => s + profitOf(c), 0)) : ''}</div>` : ''}
@@ -211,7 +232,7 @@ function renderHome(animate = true) {
   } else if (ui.overview === 'performance') {
     const gain = withChange.filter(g => g.ch && g.ch.diff > 0).sort((a, b) => b.ch.pct - a.ch.pct);
     const loss = withChange.filter(g => g.ch && g.ch.diff < 0).sort((a, b) => a.ch.pct - b.ch.pct);
-    const box = (title, list, empty) => `<div class="head"><h2>${title}</h2></div><div class="rows">${list.length ? list.map(g => itemRow(g.c, g.ch)).join('') : `<div class="panelnote" style="padding-top:7px">${empty}</div>`}</div>`;
+    const box = (title, list, empty) => `<section class="panel"><h2>${title}</h2><div class="rows">${list.length ? list.map(g => itemRow(g.c, g.ch)).join('') : `<div class="panelnote" style="padding-top:7px">${empty}</div>`}</div></section>`;
     view.innerHTML = `${head}${rangeButtons('range', ui.range)}
       ${box('Gewinner', gain, 'Keine Karte im Plus.')}
       ${box('Verlierer', loss, 'Keine Karte im Minus.')}`;
@@ -222,9 +243,10 @@ function renderHome(animate = true) {
     view.innerHTML = `${head}
       ${chartSvg(points)}
       ${rangeButtons('range', ui.range)}
-      <div class="head" style="margin-top:6px"><h2>Am wertvollsten</h2></div>
-      <div class="rows stag">${visible.map(g => itemRow(g.c, g.ch)).join('')}</div>
-      ${valuable.length > 4 ? `<button class="link viewall" data-all-valuable>${ui.allValuable ? 'Weniger' : 'Alle anzeigen'}</button>` : ''}
+      <section class="panel"><h2>Am wertvollsten</h2>
+        <div class="rows stag">${visible.map(g => itemRow(g.c, g.ch)).join('')}</div>
+        ${valuable.length > 4 ? `<button class="link viewall" data-all-valuable>${ui.allValuable ? 'Weniger' : 'Alle anzeigen'}</button>` : ''}
+      </section>
       <button class="banner" data-go="portfolio"><span><b>${cards.length} ${cards.length === 1 ? 'Karte' : 'Karten'}</b><span>Ganze Sammlung ansehen</span></span>
         <span class="fan">${fan.map(g => `<img src="${esc(small(g.c.image))}" alt="">`).join('')}</span></button>
       <div id="feedbox" data-kind="home">${feedHtml('home')}</div>`;
@@ -245,7 +267,7 @@ function openCard(key) {
     ${c.image ? `<div class="holo"><img class="cardimg" src="${esc(c.image)}" alt=""><span class="gloss"></span></div>` : ''}
     <div class="detail">
       <div><h3>${esc(c.name)}</h3>
-        <div class="muted small">${esc(GAMES[c.game])} · ${esc(c.set)}</div>
+        <div class="muted small">${esc(GAMES[c.game])} · <span class="setname">${esc(c.set)}</span></div>
         <div class="muted small">${[c.rarity, c.number && '#' + c.number].filter(Boolean).map(esc).join(' · ')}</div></div>
       <div class="pricebox"><div class="big">${money.format(c.price || 0)}</div>${changeHtml(change(points), '')}</div>
     </div>
@@ -278,7 +300,7 @@ function openPreview(card, note) {
     ${card.image ? `<div class="holo"><img class="cardimg" src="${esc(card.image)}" alt=""><span class="gloss"></span></div>` : ''}
     <div class="detail">
       <div><h3>${esc(card.name)}</h3>
-        <div class="muted small">${esc(GAMES[card.game])} · ${esc(card.set)}</div>
+        <div class="muted small">${esc(GAMES[card.game])} · <span class="setname">${esc(card.set)}</span></div>
         <div class="muted small">${[card.rarity, card.number && '#' + card.number].filter(Boolean).map(esc).join(' · ')}</div></div>
       <div class="pricebox"><div class="big">${card.price ? money.format(card.price) : 'Kein Preis'}</div></div>
     </div>
@@ -372,8 +394,8 @@ function renderScan() {
           ${hasCard(top) ? '<button class="btn sec" disabled>In deiner Sammlung</button>' : '<button class="btn" data-add="0">Hinzufügen</button>'}</div>
       </div>
       ${ui.found.length > 1 ? `<div class="head" style="margin-top:0"><h2>Andere Versionen</h2></div>
-      <div class="grid stag">${ui.found.slice(1).map((c, i) => tile(c, i + 1)).join('')}</div>` : ''}`
-      : `<div class="grid stag">${ui.found.map(tile).join('')}</div>`;
+      <div class="grid big stag">${ui.found.slice(1).map((c, i) => tile(c, i + 1)).join('')}</div>` : ''}`
+      : `<div class="grid big stag">${ui.found.map(tile).join('')}</div>`;
   } else if (ui.searchView === 'set' && ui.game === 'pokemon') {
     body = setHtml();
   } else if (ui.searchView === 'dex' && ui.game === 'pokemon') {
@@ -558,11 +580,11 @@ function renderPortfolio() {
   view.innerHTML = `
     <div class="tabs"><button class="on">Portfolio</button><span class="pill"><i>€</i>EUR</span></div>
     <section class="value">
-      <div class="label">Kartenwert · <button class="link" data-games="filter">${ui.filter === 'all' ? 'Alle Karten' : esc(GAMES[ui.filter])}</button></div>
+      <div class="label">Kartenwert: <button class="link" data-games="filter">${ui.filter === 'all' ? 'Alle Karten' : esc(GAMES[ui.filter])}</button></div>
       <div class="big">${eur(value)}</div>
     </section>
     ${shown.length ? `<div class="head"><h2>${shown.length} ${shown.length === 1 ? 'Karte' : 'Karten'}</h2></div>
-    <div class="grid stag">${shown.map(c => `
+    <div class="grid big stag">${shown.map(c => `
       <button class="tile" data-open="${esc(c.key)}">${cardImg(c)}
         <span class="name">${esc(c.name)}</span>
         <span class="sub">${esc(c.set)}</span>

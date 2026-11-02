@@ -504,6 +504,77 @@ details.facts p { margin: 9px 0 0; }
 .hitinfo .btn { background: var(--ink); color: #fff; animation: none; padding: 11px; }
 .livelink.dark { justify-content: center; font-size: 13px; }
 
+/* ---------- Version 1.4: Aufbau wie eine Portfolio-App, hell und dunkel ---------- */
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff; --panel: #ffffff; --soft: #f4f5f5; --line: #e6e8e8; --text: #16191a; --sub: #6d7374; --faint: #9ca3a3;
+  --green: #12806f; --chart: #3aa795; --red: #d92d20; --amber: #8a6100; --ink: #16191a; --on-ink: #ffffff; --range: #5f6363;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000; --panel: #111213; --soft: #1b1d1e; --line: #2b2e2f; --text: #f5f6f6; --sub: #9aa1a1; --faint: #6d7374;
+    --green: #4cc2ad; --chart: #4cc2ad; --red: #ff6257; --amber: #e0a93b; --ink: #f5f6f6; --on-ink: #000000; --range: #5a5e5e;
+  }
+}
+.btn, .btn.buy, .round.cam-btn, .scancta, .game.on, .plus.has, .nameedit button, .hitinfo .btn, #toast { color: var(--on-ink); }
+.btn.sec { color: var(--text); }
+.btn.ghostbtn, .btn.buy:disabled { color: var(--sub); }
+#nav, .livehit { background: var(--bg); }
+.plus { background: var(--bg); }
+.link { color: var(--green); }
+.filters .link { color: var(--sub); }
+
+/* Übersicht */
+.tabs button { font-size: 16px; }
+.tabs button.on { font-weight: 700; border-color: var(--chart); }
+.pill i { display: grid; background: var(--chart); color: #fff; }
+.value .label .link { color: var(--green); font-weight: 700; text-decoration: none; }
+.value .big { font-size: 40px; }
+.chart { height: 250px; }
+.sheet .chart { height: 180px; }
+.ranges { margin: 12px 0 6px; }
+.ranges button { min-width: 42px; width: 42px; height: 42px; padding: 0; border-radius: 50%; font-size: 13.5px; }
+.ranges button.on { background: var(--range); color: #fff; }
+
+/* Kasten für Listen */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px 8px; margin-top: 16px; }
+.panel h2 { font-size: 15px; margin-bottom: 6px; }
+.panel .rows { border-top: 0; }
+.panel .item { border-bottom: 0; padding: 6px 0; }
+.panel .item img { display: none; }
+.panel .item .right { font-weight: 400; }
+.panel .viewall { margin: 6px auto 4px; color: var(--green); font-weight: 700; }
+
+/* Entdecken */
+.promo { position: relative; flex: none; width: 262px; height: 124px; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #15181a; color: #fff; text-align: left; display: flex; align-items: flex-end; }
+.promo b { position: relative; z-index: 1; max-width: 118px; font-size: 16px; font-weight: 700; line-height: 1.2; }
+.promo .fan { position: absolute; right: 8px; top: 8px; width: 122px; height: 130px; }
+.promo .fan img { width: 66px; aspect-ratio: 5/7; object-fit: cover; box-shadow: none; }
+.promo .fan img:nth-child(1) { left: 0; top: 16px; }
+.promo .fan img:nth-child(2) { left: 28px; top: 4px; }
+.promo .fan img:nth-child(3) { left: 56px; top: 16px; }
+
+/* Karten in zwei Spalten */
+.grid.big { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.grid.big .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 10px 12px; }
+.grid.big .tile img { width: 82%; margin: 0 auto; border-radius: 4px; }
+.grid.big .tile .name { font-weight: 700; margin-top: 8px; }
+.grid.big .tile .val { margin-top: 5px; padding-right: 34px; }
+.grid.big .tile .qty { padding-right: 34px; }
+.grid.big .plus { top: auto; right: 9px; bottom: 9px; width: 30px; height: 30px; }
+
+/* Spiele mit Kartenbild */
+.game.art { background: linear-gradient(rgba(0,0,0,.52), rgba(0,0,0,.52)), var(--art) center 20% / cover; color: #fff; height: 78px; }
+.game.art.on { outline: 2px solid var(--chart); outline-offset: 2px; color: #fff; }
+
+/* Kartendetail */
+.holo { width: 68%; max-width: 270px; }
+.detail { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 13px 14px; }
+.setname { color: var(--green); }
+.pricebox .change::before { content: "▲ "; font-size: 10px; }
+.pricebox .change.down::before { content: "▼ "; }
+.pricebox .change.none::before { content: none; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
