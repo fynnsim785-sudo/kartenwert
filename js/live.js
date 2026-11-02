@@ -1,6 +1,8 @@
 // Live-Scanner: erkennt Karten direkt im Kamerabild und nimmt sie automatisch auf.
 import { VISUAL_SURE, visualSearch, cardFromKey, identify, checkPhoto, loadIndex } from './scan.js';
 import { GAMES } from './cards.js';
+import { ICON } from './icons.js';
+import { cardFlight } from './fx.js';
 
 const money = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -14,16 +16,16 @@ export async function openScanner({ game, hashes, onAdd, onGallery }) {
   el.id = 'live';
   el.innerHTML = `
     <video playsinline autoplay muted></video>
-    <div class="frame"><i></i><i></i><i></i><i></i><span class="beam"></span></div>
+    <div class="frame"><i></i><i></i><i></i><i></i></div>
     <div class="livetop">
-      <button class="liveicon" data-live="close" aria-label="Schließen">×</button>
+      <button class="liveicon" data-live="close" aria-label="Schließen">${ICON.close}</button>
       <span class="livecount" hidden></span>
-      <button class="liveicon" data-live="torch" aria-label="Licht" hidden>⚡</button>
+      <button class="liveicon" data-live="torch" aria-label="Licht" hidden>${ICON.torch}</button>
     </div>
-    <p class="hint">Karte in den Rahmen legen</p>
+    <p class="hint"><span class="hinttext">Karte in den Rahmen legen</span></p>
     <div class="liveactions">
-      <button class="livelink" data-live="gallery">Galerie</button>
-      <button class="shutter" data-live="shot" aria-label="Foto machen"></button>
+      <button class="livelink" data-live="gallery">${ICON.gallery}<span>Galerie</span></button>
+      <button class="shutter" data-live="shot" aria-label="Foto machen"><span></span></button>
       <span class="livegame">${esc(GAMES[game])}</span>
     </div>
     <div class="flash"></div>
@@ -33,7 +35,15 @@ export async function openScanner({ game, hashes, onAdd, onGallery }) {
 
   const video = el.querySelector('video');
   const frame = el.querySelector('.frame');
-  const hint = el.querySelector('.hint');
+  const hintBox = el.querySelector('.hint');
+  const hintText = el.querySelector('.hinttext');
+  const hint = {
+    get textContent() { return hintText.textContent; },
+    set textContent(t) {
+      if (hintText.textContent !== t) hintText.textContent = t;
+      hintBox.hidden = !t;
+    },
+  };
   const panel = el.querySelector('.livehit');
   const countEl = el.querySelector('.livecount');
   video.srcObject = stream;
@@ -93,7 +103,7 @@ export async function openScanner({ game, hashes, onAdd, onGallery }) {
     frame.classList.add('locked');
     const f = el.querySelector('.flash');
     f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
-    if (navigator.vibrate) navigator.vibrate(35);
+    if (navigator.vibrate) navigator.vibrate(25);
   }
 
   function resume(text) {
@@ -114,13 +124,14 @@ export async function openScanner({ game, hashes, onAdd, onGallery }) {
         <span class="muted small">${esc(top.set)}${top.number ? ' · #' + esc(top.number) : ''}</span>
         <b class="hitprice">${top.price ? money.format(top.price) : 'Kein Preis'}</b>
         <button class="btn" data-live="add">Hinzufügen</button>
-        <button class="livelink dark" data-live="skip">Falsch · weiter scannen</button>
+        <button class="livelink dark" data-live="skip">Falsche Karte</button>
       </div>
       ${cards.length > 1 ? `<div class="hitothers">${cards.slice(1).map((c, i) => `<button data-live="swap" data-i="${i + 1}"><img src="${esc(thumb(c))}" alt="${esc(c.set)}"></button>`).join('')}</div>` : ''}`;
     panel.hidden = false;
     panel.classList.remove('in'); void panel.offsetWidth; panel.classList.add('in');
     panel._cards = cards;
     panel._blob = blob;
+    if (thumb(top)) cardFlight(frame.getBoundingClientRect(), panel.querySelector('.hitcard img'), thumb(top));
   }
 
   async function lock(key, hits) {
