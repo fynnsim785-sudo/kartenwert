@@ -4,7 +4,6 @@ import { countTo, flyToCollection, attachTilt, drawChart, enterPage, observeReve
 import { ICON } from './icons.js';
 import * as market from './market.js';
 import { PACKS, PACK_CLIP, packById, packFace, rollPack, playPack } from './packs.js';
-import { openBattle, ENERGY_CARDS, energyType } from './battle.js';
 
 const CENTS = 100;
 // Rabatt: Etwa jede vierte Karte kostet diese Woche 5 bis 10 % weniger. Jede Karte nur einmal, damit kein Geld-Glitch entsteht.
@@ -74,7 +73,7 @@ function load() {
   s.ledger = s.ledger || 0; // Käufe und Verkäufe mit dem App-Guthaben, in Cent
   s.events = s.events || [];
   s.discountUsed = s.discountUsed || [];
-  s.battleTeam = s.battleTeam || []; // Schlüssel der Karten im Kampf-Team
+  delete s.battleTeam;
   s.themes = s.themes || []; // eigene Themen im Portfolio: { id, name, keys: [Karten-Schlüssel] }
   s.name = s.name && s.name !== 'Sammler' ? s.name : 'Collector';
   s.lastRefresh = s.lastRefresh || 0;
@@ -654,7 +653,6 @@ function renderProfile() {
       <div><span>${profit < 0 ? 'Loss' : 'Profit'}</span><b class="${profit < 0 ? 'down' : profit > 0 ? 'up' : ''}">${profit < 0 ? '-' : profit > 0 ? '+' : ''}${eur(Math.abs(profit))}</b></div>
       <div><span>Cards</span><b>${nf.format(cards.length)}</b></div>
     </div>
-    <button class="battlecta" data-battle><span class="ic">${ICON.battle}</span><span class="txt"><b>Battle</b><span>Fight other players with your Pokémon</span></span>${ICON.chevron}</button>
     <div class="head"><h2>Showcase</h2>${top.length ? '<button class="link" data-go="portfolio">All</button>' : ''}</div>
     ${top.length ? `<div class="grid">${stacks(top).slice(0, 3).map(({ c, n }) => `<button class="tile" data-open="${esc(c.key)}">${cardImg(c)}${copyTag(n)}<span class="name">${esc(c.name)}</span><span class="val">${money.format(c.price || 0)}</span></button>`).join('')}</div>`
       : packCta('Open a pack')}
@@ -675,7 +673,7 @@ function renderProfile() {
       <p>All cards are digital only. You get them from packs, by buying or in auctions. You cannot add your own real cards. Cards from packs can be auctioned at any time.</p>
       <p>Auctions only use app balance.</p>
       <p>Your collection, themes and name are stored only on this device.</p>
-      <p>Version 1.10.0</p>
+      <p>Version 1.10.1</p>
     </details>`;
 }
 
@@ -905,28 +903,6 @@ async function sellBack(key) {
   renderTab();
 }
 
-// Energie-Karten für Kämpfe, jede Sorte bis zu 15-mal.
-function energyShelf() {
-  return `<div class="head" id="energy"><h2>Energy</h2><span class="muted small">For battles · up to 15 each</span></div>
-    <div class="shelf stag">${ENERGY_CARDS.map(e => {
-      const n = state.cards.filter(c => c.verified && energyType(c) === e.type).length;
-      return `<button class="prod energy" data-energy="${esc(e.id)}"><img src="${esc(small(e.image))}" alt="" loading="lazy">
-        <span class="name">${esc(e.type)} Energy</span><span class="sub">${n} / ${MAX_ENERGY}</span></button>`;
-    }).join('')}</div>`;
-}
-async function openEnergy(id) {
-  const card = await getCard('pokemon', id).catch(() => null);
-  if (!card) { toast('This card cannot be loaded right now.'); return; }
-  openPreview(card, '');
-}
-function startBattle() {
-  if (!ui.marketReady) { toast('Battles need a connection to the server. Please try again in a moment.'); return; }
-  openBattle({
-    state, save, toast, isEnergy, onClose: () => renderTab(),
-    goEnergy: () => { switchTab('market'); setTimeout(() => { const el = document.getElementById('energy'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 400); },
-  });
-}
-
 // Die Pack-Regale im Markt.
 function packShelves() {
   const shelf = (title, tier) => `<div class="head"><h2>${title}</h2></div><div class="shelf stag">${PACKS.filter(p => p.tier === tier).map(p => `
@@ -1019,7 +995,7 @@ function renderMarket() {
     <div class="points"><span>Free balance <b>${eur(freeBalance())}</b></span><span>${ui.marketGame === 'all' ? '' : esc(GAMES[ui.marketGame])}</span></div>
     ${ui.auctions.length ? `<div class="head"><h2>Auctions</h2></div>
       <div class="shelf stag">${ui.auctions.filter(a => (ui.marketGame === 'all' || a.game === ui.marketGame) && (!q || a.name.toLowerCase().includes(q))).map(auctionTile).join('')}</div>` : ''}
-    ${q || !['all', 'pokemon'].includes(ui.marketGame) ? '' : packShelves() + energyShelf()}
+    ${q || !['all', 'pokemon'].includes(ui.marketGame) ? '' : packShelves()}
     <div class="head"><h2>Featured</h2></div>
     ${featured.length ? `<div class="shelf stag">${featured.join('')}</div>` : SKELETON_SHELF}
     ${watched.length ? section('Watchlist', 'watch', watched, '') : ''}
@@ -1192,7 +1168,7 @@ document.addEventListener('click', e => {
   if (e.target.classList && e.target.classList.contains('cardimg')) { openZoom(e.target.src); return; }
   const b = e.target.closest('button');
   if (!b) { if (e.target === modal) closeModal(); return; }
-  if (b.closest('#live') || b.closest('#battle')) return;
+  if (b.closest('#live')) return;
   const d = b.dataset;
   if (d.range) { ui.range = d.range; renderHome(); }
   else if (d.overview) { ui.overview = d.overview; renderHome(); }
@@ -1202,8 +1178,6 @@ document.addEventListener('click', e => {
   else if (d.go) switchTab(d.go);
   else if ('allValuable' in d) { ui.allValuable = !ui.allValuable; renderHome(false); }
   else if (d.open) openCard(d.open);
-  else if ('battle' in d) startBattle();
-  else if (d.energy) openEnergy(d.energy);
   else if ('close' in d) closeModal();
   else if (d.remove) {
     state.cards = state.cards.filter(c => c.key !== d.remove);

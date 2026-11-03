@@ -208,33 +208,3 @@ export async function getCard(game, id) {
   const r = await getJson(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${encodeURIComponent(id)}`);
   return r && r.data[0] ? yugiohCard(r.data[0]) : null;
 }
-
-// ---------- Kampfwerte ----------
-// Typen kommen je nach Sprache verschieden an, für den Kampf gelten die englischen Namen.
-const TYPE = {
-  Grass: 'Grass', Fire: 'Fire', Water: 'Water', Lightning: 'Lightning', Psychic: 'Psychic', Fighting: 'Fighting',
-  Darkness: 'Darkness', Metal: 'Metal', Dragon: 'Dragon', Fairy: 'Fairy', Colorless: 'Colorless',
-  Pflanze: 'Grass', Feuer: 'Fire', Wasser: 'Water', Elektro: 'Lightning', Psycho: 'Psychic', Kampf: 'Fighting',
-  Finsternis: 'Darkness', Metall: 'Metal', Drache: 'Dragon', Fee: 'Fairy', Farblos: 'Colorless',
-  草: 'Grass', 炎: 'Fire', 水: 'Water', 雷: 'Lightning', 超: 'Psychic', 闘: 'Fighting', 悪: 'Darkness', 鋼: 'Metal',
-  ドラゴン: 'Dragon', フェアリー: 'Fairy', 無色: 'Colorless',
-};
-export const battleType = t => TYPE[t] || 'Colorless';
-
-// Lebenspunkte, Typ, Schwäche und bis zu 3 Attacken einer Pokémon-Karte. null bei Trainer- und Energie-Karten.
-export async function battleStats(card) {
-  if (card.game !== 'pokemon') return null;
-  const [lang, ...rest] = String(card.id).split(':');
-  const c = await getJson(`https://api.tcgdex.net/v2/${lang}/cards/${encodeURIComponent(rest.join(':'))}`);
-  if (!c || !c.hp || !Array.isArray(c.attacks) || !c.attacks.length) return null;
-  return {
-    hp: Number(c.hp) || 60,
-    type: battleType((c.types || [])[0]),
-    weak: c.weaknesses && c.weaknesses[0] ? battleType(c.weaknesses[0].type) : '',
-    attacks: c.attacks.slice(0, 3).map(a => ({
-      name: a.name || 'Attack',
-      cost: (a.cost || []).map(battleType).slice(0, 5),
-      damage: parseInt(String(a.damage || '0'), 10) || 0,
-    })),
-  };
-}
