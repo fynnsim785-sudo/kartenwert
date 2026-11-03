@@ -299,7 +299,7 @@ function openCard(key) {
         <div><span>${profitOf(c) < 0 ? 'Verlust' : 'Gewinn'}</span><b>${profitOf(c) < 0 ? '-' : '+'}${eur(Math.abs(profitOf(c)))}</b></div>
       </div>
       <div class="btns"><button class="btn" data-sell-back="${esc(c.key)}"><span>Verkaufen · ${money.format(c.price || 0)}</span></button></div>
-      ${c.fromPack && ui.marketReady ? `<div class="btns"><button class="btn sec" data-auction-form="${esc(c.key)}" ${auctionReady(c) ? '' : 'disabled'}>${auctionReady(c) ? 'Versteigern' : `Versteigern ab ${new Date(c.boughtAt + DAY).toLocaleString('de-DE', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`}</button></div>` : ''}`
+      ${c.fromPack && ui.marketReady ? `<div class="btns"><button class="btn sec" data-auction-form="${esc(c.key)}">Versteigern</button></div>` : ''}`
       : `<p class="note ${c.verified ? 'ok' : 'warn'}" style="margin:0">${c.verified ? 'In deiner Sammlung' : 'Zählt nicht. Kaufe die Karte oder ziehe sie aus einem Pack.'}</p>`}
     <div class="btns"><button class="btn sec" data-remove="${esc(c.key)}">Aus der Sammlung entfernen</button></div></div>`;
   modal.hidden = false;
@@ -567,10 +567,10 @@ function renderProfile() {
     <details class="facts"><summary><span>Infos</span>${ICON.chevron}</summary>
       <p>Das Guthaben ist nur eine Anzeige in der App. Du kannst es nicht abheben oder außerhalb der App ausgeben.</p>
       <p>Preise kommen von Cardmarket, TCGplayer, Scryfall und YGOPRODeck und können veraltet sein.</p>
-      <p>Alle Karten sind nur digital. Du bekommst sie aus Packs, durch Kauf oder in Auktionen. Eigene echte Karten kann man nicht hinzufügen. Karten aus Packs kannst du 24 Stunden nach dem Öffnen versteigern.</p>
+      <p>Alle Karten sind nur digital. Du bekommst sie aus Packs, durch Kauf oder in Auktionen. Eigene echte Karten kann man nicht hinzufügen. Karten aus Packs kannst du jederzeit versteigern.</p>
       <p>Auktionen laufen nur mit App-Guthaben.</p>
       <p>Sammlung und Name liegen nur auf diesem Gerät. Fotos werden nie hochgeladen.</p>
-      <p>Version 1.8.1</p>
+      <p>Version 1.8.2</p>
     </details>`;
 }
 
@@ -716,9 +716,8 @@ async function doAuctionCancel(id) {
   } catch (e) { toast(e.message); }
 }
 
-// Pack-Karten lassen sich 24 Stunden nach dem Öffnen versteigern, so verlangt es auch der Server.
-const DAY = 24 * 60 * 60 * 1000;
-const auctionReady = c => !!c.fromPack && Date.now() - (c.boughtAt || 0) >= DAY;
+// Pack-Karten lassen sich sofort versteigern.
+const auctionReady = c => !!c.fromPack;
 
 function openAuctionForm(key) {
   const c = state.cards.find(x => x.key === key);
@@ -841,7 +840,7 @@ async function buyPack(id, button) {
       const share = worth ? def.price * (c.price || 0) / worth : def.price / cards.length;
       addToCollection({ ...c, hist: {}, buyPrice: share, boughtAt: Date.now(), fromPack: def.name }, true, null);
     }
-    // Beim Server melden, damit die Karten nach 24 Stunden versteigert werden können. Klappt das nicht, wird es beim Versteigern nachgeholt.
+    // Beim Server melden, damit die Karten versteigert werden können. Klappt das nicht, wird es beim Versteigern nachgeholt.
     if (ui.marketReady) for (const c of cards) market.packClaim(state.secret, c).catch(() => {});
     logEvent('pack', { name: def.name, image: cards[cards.length - 1].image }, -price);
     save();
