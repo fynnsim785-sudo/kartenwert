@@ -10,6 +10,7 @@ const CENTS = 100;
 const DISCOUNT_MAX = 10;
 function discountOf(card) {
   const ident = cardIdent(card);
+  if (isDeal(card)) return dealTaken(card) ? 0 : DEAL_PCT;
   if (state.discountUsed.includes(ident)) return 0;
   let h = Math.floor(Date.now() / 604800000);
   for (const ch of ident) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -285,7 +286,9 @@ function renderHome(animate = true) {
       </section>
       <button class="banner" data-go="portfolio"><span><b>${cards.length} ${cards.length === 1 ? 'card' : 'cards'}</b><span>View whole collection</span></span>
         <span class="fan">${fan.map(g => `<img src="${esc(small(g.c.image))}" alt="">`).join('')}</span></button>
+      <div id="dealsbox">${dealsHtml()}</div>
       <div id="feedbox" data-kind="home">${feedHtml('home')}</div>`;
+    loadDeals();
   }
   countTo(document.getElementById('total'), ui.shown, total, eur);
   ui.shown = total;
@@ -331,16 +334,16 @@ function openCard(key) {
 }
 
 // Zeigt eine Karte, die noch nicht in der Sammlung ist.
-function openPreview(card, note) {
+function openPreview(card, note, always = false) {
   const have = owned(card);
-  if (have && have.verified) { openCard(have.key); return; }
+  if (have && have.verified && !always) { openCard(have.key); return; }
   ui.preview = card;
   modal.innerHTML = `<div class="sheet">
     <button class="back" data-close aria-label="Back">${ICON.back}</button>
     ${card.image ? `<div class="holo"><img class="cardimg" src="${esc(hq(card.image))}" alt=""><span class="gloss"></span></div>` : ''}
     ${auctionTicker(card)}
     <div class="detail">
-      ${have ? `<button class="star on" data-remove="${esc(have.key)}" aria-label="Unsave">${ICON.star}</button>` : '<button class="star" data-add-preview aria-label="Save">' + ICON.star + '</button>'}
+      ${have && have.verified ? '' : have ? `<button class="star on" data-remove="${esc(have.key)}" aria-label="Unsave">${ICON.star}</button>` : '<button class="star" data-add-preview aria-label="Save">' + ICON.star + '</button>'}
       <div><h3>${esc(card.name)}</h3>
         <div class="muted small">${esc(GAMES[card.game])} · <span class="setname">${esc(card.set)}</span></div>
         <div class="muted small">${[card.rarity, card.number && '#' + card.number].filter(Boolean).map(esc).join(' · ')}</div></div>
@@ -673,7 +676,7 @@ function renderProfile() {
       <p>All cards are digital only. You get them from packs, by buying or in auctions. You cannot add your own real cards. Cards from packs can be auctioned at any time.</p>
       <p>Auctions only use app balance.</p>
       <p>Your collection, themes and name are stored only on this device.</p>
-      <p>Version 1.10.1</p>
+      <p>Version 1.11.0</p>
     </details>`;
 }
 
@@ -875,7 +878,8 @@ async function buyCard(from) {
   const cut = discountCut(fresh), price = cents(fresh.price) - cut;
   if (price > freeBalance()) { toast('Not enough balance.'); return; }
   state.ledger -= price;
-  if (cut) state.discountUsed.push(cardIdent(fresh));
+  if (cut && isDeal(fresh)) markDeal(fresh);
+  else if (cut) state.discountUsed.push(cardIdent(fresh));
   // Kurve beginnt erst mit dem Kauf, davor gehörte dir die Karte nicht.
   addToCollection({ ...fresh, hist: {}, buyPrice: price / CENTS, boughtAt: Date.now() }, true, null);
   logEvent('kauf', fresh, -price);
@@ -901,6 +905,93 @@ async function sellBack(key) {
   const profit = value - cents(c.buyPrice);
   toast(`Sold for ${eur(value)}. ${profit >= 0 ? 'Profit' : 'Loss'}: ${eur(Math.abs(profit))}`);
   renderTab();
+}
+
+// ---------- Rabatt des Tages ----------
+// Jeden Tag 3 Karten aus verschiedenen Sets 20 % günstiger, nur Karten zwischen 2 € und 100 €.
+// Jede Tageskarte gibt es pro Tag einmal mit Rabatt, sonst ließe sich über den Rückverkauf beliebig Geld machen.
+const DEAL_PCT = 20, DEAL_MIN = 2, DEAL_MAX = 100, DEAL_COUNT = 3;
+// Zufall, der für alle am selben Tag gleich ausfällt
+function seeded(text) {
+  let h = 2166136261;
+  for (const ch of text) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  };
+}
+function shuffleWith(list, rnd) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const k = Math.floor(rnd() * (i + 1));
+    [a[i], a[k]] = [a[k], a[i]];
+  }
+  return a;
+}
+const dealsToday = () => (state.deals && state.deals.day === today() ? state.deals.cards : []);
+const isDeal = card => dealsToday().some(c => cardIdent(c) === cardIdent(card));
+const dealTaken = card => !!state.dealsUsed && state.dealsUsed.day === today() && state.dealsUsed.ids.includes(cardIdent(card));
+function markDeal(card) {
+  if (!state.dealsUsed || state.dealsUsed.day !== today()) state.dealsUsed = { day: today(), ids: [] };
+  state.dealsUsed.ids.push(cardIdent(card));
+}
+
+let dealsLoading = false;
+async function loadDeals() {
+  const day = today();
+  if (dealsLoading || (state.deals && state.deals.day === day)) return;
+  dealsLoading = true;
+  try {
+    const rnd = seeded('kartenwert-deals-' + day);
+    const picked = [];
+    for (const pack of shuffleWith(PACKS.filter(p => p.lang === 'en'), rnd)) {
+      if (picked.length >= DEAL_COUNT) break;
+      const set = await getSet('en', pack.set).catch(() => null);
+      if (!set) continue;
+      const pool = shuffleWith(set.cards.filter(c => c.image), rnd).slice(0, 24);
+      for (let i = 0; i < pool.length; i += 8) {
+        const found = await Promise.all(pool.slice(i, i + 8).map(c => getCard('pokemon', 'en:' + c.id).catch(() => null)));
+        const hit = found.find(c => c && c.image && c.price >= DEAL_MIN && c.price <= DEAL_MAX);
+        if (hit) { picked.push(hit); break; }
+      }
+    }
+    if (picked.length) {
+      state.deals = { day, cards: picked.map(c => ({ game: c.game, id: c.id, name: c.name, set: c.set, number: c.number, image: c.image, price: c.price, hist: c.hist, setId: c.setId, rawId: c.rawId, dexId: c.dexId, rarity: c.rarity })) };
+      save();
+      paintDeals();
+    }
+  } finally { dealsLoading = false; }
+}
+
+// Zeit bis Mitternacht, dann kommen neue Karten
+function dealsEnd() {
+  const end = new Date(); end.setHours(24, 0, 0, 0);
+  const min = Math.max(0, Math.round((end - Date.now()) / 60000));
+  return `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m`;
+}
+function dealsHtml() {
+  const cards = dealsToday();
+  return `<div class="head"><h2>Deals of the day</h2><span class="muted small dealtime">New in ${dealsEnd()}</span></div>
+    ${cards.length ? `<div class="deals stag">${cards.map(c => {
+      const taken = dealTaken(c);
+      const now = cents(c.price) - Math.round(cents(c.price) * DEAL_PCT / 100);
+      return `<button class="dealcard ${taken ? 'taken' : ''}" data-deal="${esc(c.id)}">
+        <span class="pic">${cardImg(c)}<span class="off">${taken ? 'Bought' : '−' + DEAL_PCT + '%'}</span></span>
+        <span class="name">${esc(c.name)}</span>
+        <span class="sub">${esc(c.set)}</span>
+        <span class="prices"><s>${money.format(c.price)}</s><b>${eur(now)}</b></span>
+      </button>`;
+    }).join('')}</div>` : `<div class="deals">${'<span class="dealcard ghost"><span class="pic"></span></span>'.repeat(DEAL_COUNT)}</div>`}`;
+}
+function paintDeals() {
+  const box = document.getElementById('dealsbox');
+  if (box) box.innerHTML = dealsHtml();
+}
+function openDeal(id) {
+  const card = dealsToday().find(c => c.id === id);
+  if (card) openPreview(card, '', true);
 }
 
 // Die Pack-Regale im Markt.
@@ -977,6 +1068,7 @@ function section(title, key, items, empty) {
 }
 
 function renderMarket() {
+  loadDeals();
   const q = ui.mq.trim().toLowerCase();
   const list = ui.listings.filter(l => (ui.marketGame === 'all' || l.game === ui.marketGame) && (!q || l.name.toLowerCase().includes(q)));
   const top = [...list].sort((a, b) => b.price - a.price).slice(0, 6);
@@ -993,6 +1085,7 @@ function renderMarket() {
       <button class="round" data-games="marketGame" aria-label="Choose game">${ICON.menu}</button>
     </div>
     <div class="points"><span>Free balance <b>${eur(freeBalance())}</b></span><span>${ui.marketGame === 'all' ? '' : esc(GAMES[ui.marketGame])}</span></div>
+    ${q || !['all', 'pokemon'].includes(ui.marketGame) ? '' : `<div id="dealsbox">${dealsHtml()}</div>`}
     ${ui.auctions.length ? `<div class="head"><h2>Auctions</h2></div>
       <div class="shelf stag">${ui.auctions.filter(a => (ui.marketGame === 'all' || a.game === ui.marketGame) && (!q || a.name.toLowerCase().includes(q))).map(auctionTile).join('')}</div>` : ''}
     ${q || !['all', 'pokemon'].includes(ui.marketGame) ? '' : packShelves()}
@@ -1178,6 +1271,7 @@ document.addEventListener('click', e => {
   else if (d.go) switchTab(d.go);
   else if ('allValuable' in d) { ui.allValuable = !ui.allValuable; renderHome(false); }
   else if (d.open) openCard(d.open);
+  else if (d.deal) openDeal(d.deal);
   else if ('close' in d) closeModal();
   else if (d.remove) {
     state.cards = state.cards.filter(c => c.key !== d.remove);

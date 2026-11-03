@@ -856,3 +856,20 @@ h2 { font-weight: 900; }
 .tile { position: relative; }
 .tile .copies { position: absolute; top: 8px; right: 8px; padding: 2px 8px; border-radius: 99px; background: var(--ink); color: var(--on-ink, #fff); font-size: 12px; font-weight: 900; letter-spacing: .02em; }
 .head .count { margin-left: 8px; font-size: 12.5px; font-weight: 700; color: var(--sub); }
+
+/* Rabatt des Tages: drei Karten nebeneinander */
+.deals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 8px; }
+.dealcard { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 0; border: 0; background: none; text-align: left; }
+.dealcard .pic { position: relative; display: block; border-radius: 6px; overflow: hidden; background: var(--soft); aspect-ratio: 5 / 7; }
+.dealcard .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dealcard .off { position: absolute; top: 8px; left: 8px; padding: 2px 8px; border-radius: 99px; background: var(--red); color: #fff; font-size: 12px; font-weight: 900; }
+.dealcard .name { margin-top: 8px; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dealcard .sub { font-size: 11.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dealcard .prices { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.dealcard .prices s { font-size: 11.5px; color: var(--faint); }
+.dealcard .prices b { font-size: 14px; font-weight: 900; color: var(--red); }
+.dealcard.taken .pic img { opacity: .45; }
+.dealcard.taken .off { background: var(--ink); color: var(--on-ink); }
+.dealcard.taken .prices b { color: var(--sub); }
+.dealcard.ghost .pic { animation: btpulse 1.4s ease-in-out infinite; }
+@keyframes btpulse { 50% { opacity: .45; } }
