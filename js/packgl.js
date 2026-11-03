@@ -162,11 +162,11 @@ void main(){
     vec3 R=reflect(-V,N);
     float goldMask=texture(uBackMask,bu).r;
     float sweep=pow(.5+.5*sin(R.x*9.+R.y*6.+uTime*.7+vUv.y*4.),7.);
-    col+=goldMask*(sweep*.9+pow(max(dot(N,H),0.),24.)*.6)*vec3(1.,.86,.5);
+    col+=goldMask*(sweep*.35+pow(max(dot(N,H),0.),24.)*.3)*vec3(.95,.98,1.);
     col+=pow(max(dot(N,H),0.),40.)*.12;
     vec2 cell=floor(vUv*vec2(46.,64.));
     float tw=h21(cell+3.);
-    col+=goldMask*step(.93,tw)*pow(.5+.5*sin(uTime*4.+tw*50.+R.x*20.),10.)*1.2;
+    col+=0.*goldMask*step(.93,tw)*pow(.5+.5*sin(uTime*4.+tw*50.+R.x*20.),10.)*1.2;
     col+=vec3(1.,.8,.3)*uAura*(.18+.2*sin(uTime*5.))*smoothstep(.0,-.09,d)*smoothstep(-.09,-.0,d)*5.;
   }
   o=vec4(col*uDim,cov);
@@ -382,88 +382,73 @@ function drawBack(def) {
   return c;
 }
 
-// Rückseite der verdeckten Karten in den Farben des Packs: Goldrand, Druckraster und das KartenWert-Zeichen in der Mitte.
-// Zweites Bild: Maske der Goldteile, nur die glänzen im Licht.
-function drawCardBack(def) {
-  const W = 768, H = 1075, cx = W / 2, cy = H / 2;
+// Rückseite der verdeckten Karten wie bei echten Sammelkarten: blauer Rand, blauer Wirbel mit hellem Zentrum.
+// Pokéball und Pokémon-Schriftzug sind Marken, in der Mitte steht deshalb das KartenWert-Zeichen.
+// Zweites Bild: Maske der Teile, die im Licht glänzen.
+function drawCardBack() {
+  const W = 768, H = 1075, cx = W / 2, cy = H * .5;
   const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
   const img = mk(), mask = mk();
   const x = img.getContext('2d'), m = mask.getContext('2d');
   m.fillStyle = '#000'; m.fillRect(0, 0, W, H);
-  const [c1, c2] = def.colors;
-  const gold = (y0, y1) => {
-    const gr = x.createLinearGradient(0, y0, 0, y1);
-    gr.addColorStop(0, '#fff1bd'); gr.addColorStop(.35, '#e8bb52'); gr.addColorStop(.6, '#a8741f'); gr.addColorStop(1, '#f3d27a');
-    return gr;
+  // Rand: gleichmäßiges Blau wie auf echten Karten
+  const border = x.createLinearGradient(0, 0, W, H);
+  border.addColorStop(0, '#2d63b8'); border.addColorStop(.5, '#2558ab'); border.addColorStop(1, '#1d4892');
+  x.fillStyle = border; x.fillRect(0, 0, W, H);
+  // Wirbel: Spirale um die Mitte, Wolken aus Rauschen, innen hell, außen dunkelblau
+  const fx = 44, fy = 44, fw = W - 88, fh = H - 88;
+  const data = x.getImageData(fx, fy, fw, fh), px = data.data;
+  const hash = (i, j) => { const s = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return s - Math.floor(s); };
+  const noise = (u, v) => {
+    const i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j;
+    const a = hash(i, j), b = hash(i + 1, j), c = hash(i, j + 1), d = hash(i + 1, j + 1);
+    const su = fu * fu * (3 - 2 * fu), sv = fv * fv * (3 - 2 * fv);
+    return a + (b - a) * su + (c - a) * sv + (a - b - c + d) * su * sv;
   };
-  // Goldteile kommen in beide Bilder
-  const both = draw => { draw(x, true); m.save(); draw(m, false); m.restore(); };
-  const ink = (ctx, isImg, y0, y1) => isImg ? gold(y0, y1) : '#fff';
-
-  // Rand
-  x.fillStyle = shade(c2, .55); x.fillRect(0, 0, W, H);
-  both((ctx, i) => { ctx.strokeStyle = ink(ctx, i, 0, H); ctx.lineWidth = 7; ctx.beginPath(); ctx.roundRect(16, 16, W - 32, H - 32, 34); ctx.stroke(); });
-  // Innenfeld
-  const fx = 48, fy = 48, fw = W - 96, fh = H - 96;
-  const field = x.createRadialGradient(cx, cy * .92, 30, cx, cy, H * .62);
-  field.addColorStop(0, shade(c1, -.25)); field.addColorStop(.45, c1); field.addColorStop(1, shade(c2, .35));
-  x.save();
-  x.beginPath(); x.roundRect(fx, fy, fw, fh, 22); x.clip();
-  x.fillStyle = field; x.fillRect(fx, fy, fw, fh);
-  // Strahlen
-  x.save(); x.translate(cx, cy);
-  for (let i = 0; i < 40; i++) {
-    x.rotate(Math.PI * 2 / 40);
-    x.fillStyle = i % 2 ? 'rgba(255,255,255,.075)' : 'rgba(0,0,0,.05)';
-    x.beginPath(); x.moveTo(0, 0); x.lineTo(-48, -H); x.lineTo(48, -H); x.fill();
+  const dark = [10, 30, 92], mid = [36, 98, 196], light = [128, 196, 246], white = [236, 248, 255];
+  const mix = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t];
+  const R = Math.hypot(fw, fh) / 2;
+  for (let y = 0; y < fh; y++) for (let xx = 0; xx < fw; xx++) {
+    const dx = xx + fx - cx, dy = y + fy - cy;
+    const r = Math.hypot(dx, dy) / R, a = Math.atan2(dy, dx);
+    const s = a + Math.log(r + .04) * 2.4;
+    const n = noise(dx / 70 + 10, dy / 70) * .6 + noise(dx / 26, dy / 26 + 5) * .4;
+    const band = .5 + .5 * Math.sin(s * 3 + n * 3.2);
+    const streak = Math.pow(.5 + .5 * Math.sin(s * 9 + n * 5), 6);
+    const inner = Math.max(0, 1 - r * 1.35);
+    let col = mix(dark, mid, Math.min(1, band * .85 + inner * .4));
+    col = mix(col, light, Math.min(1, inner * band * 1.3 + streak * .35 * (1 - r)));
+    col = mix(col, white, Math.min(1, Math.pow(inner, 2.2) * 1.4 + streak * inner * .5));
+    const k = (y * fw + xx) * 4;
+    px[k] = col[0]; px[k + 1] = col[1]; px[k + 2] = col[2]; px[k + 3] = 255;
   }
-  x.restore();
-  // Druckraster: Punkte werden nach außen größer
-  x.fillStyle = 'rgba(0,0,0,.2)';
-  for (let y = fy + 7; y < fy + fh; y += 13) for (let xx = fx + 7 + ((y / 13) % 2) * 6.5; xx < fx + fw; xx += 13) {
-    const d = Math.hypot(xx - cx, y - cy) / (H * .55);
-    const r = Math.max(0, d - .35) * 6.5;
-    if (r > .3) { x.beginPath(); x.arc(xx, y, Math.min(r, 5.5), 0, Math.PI * 2); x.fill(); }
-  }
-  // Ringe um die Mitte
-  x.strokeStyle = 'rgba(255,255,255,.16)'; x.lineWidth = 2;
-  for (const r of [232, 262, 330]) { x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.stroke(); }
-  x.restore();
-  // feine Goldlinie im Feld und Rauten in den Ecken
-  both((ctx, i) => {
-    ctx.strokeStyle = ink(ctx, i, 0, H); ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.roundRect(fx + 12, fy + 12, fw - 24, fh - 24, 14); ctx.stroke();
-    ctx.fillStyle = ink(ctx, i, 0, H);
-    for (const [px, py] of [[fx + 12, fy + 12], [fx + fw - 12, fy + 12], [fx + 12, fy + fh - 12], [fx + fw - 12, fy + fh - 12]]) {
-      ctx.beginPath(); ctx.moveTo(px, py - 15); ctx.lineTo(px + 15, py); ctx.lineTo(px, py + 15); ctx.lineTo(px - 15, py); ctx.closePath(); ctx.fill();
-    }
-  });
-  // Plakette in der Mitte
+  // Ecken des Wirbelfelds abrunden
+  const field = mk(); field.getContext('2d').putImageData(data, fx, fy);
+  x.save(); x.beginPath(); x.roundRect(fx, fy, fw, fh, 18); x.clip(); x.drawImage(field, 0, 0); x.restore();
+  x.strokeStyle = 'rgba(8,24,70,.55)'; x.lineWidth = 4;
+  x.beginPath(); x.roundRect(fx, fy, fw, fh, 18); x.stroke();
+  // Zeichen in der Mitte
   x.save();
-  x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 30; x.shadowOffsetY = 8;
-  x.fillStyle = shade(c2, .5);
-  x.beginPath(); x.arc(cx, cy, 196, 0, Math.PI * 2); x.fill();
+  x.shadowColor = 'rgba(0,20,60,.5)'; x.shadowBlur = 26; x.shadowOffsetY = 8;
+  x.fillStyle = '#ffffff';
+  x.beginPath(); x.arc(cx, cy, 168, 0, Math.PI * 2); x.fill();
   x.restore();
-  const disk = x.createRadialGradient(cx - 50, cy - 70, 20, cx, cy, 190);
-  disk.addColorStop(0, shade(c2, .1)); disk.addColorStop(1, shade(c2, .6));
-  x.fillStyle = disk; x.beginPath(); x.arc(cx, cy, 182, 0, Math.PI * 2); x.fill();
-  both((ctx, i) => {
-    ctx.strokeStyle = ink(ctx, i, cy - 200, cy + 200);
-    ctx.lineWidth = 14; ctx.beginPath(); ctx.arc(cx, cy, 190, 0, Math.PI * 2); ctx.stroke();
-    ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, 166, 0, Math.PI * 2); ctx.stroke();
-  });
-  // KartenWert-Zeichen: zwei Karten mit K, wie das App-Symbol
+  x.fillStyle = '#10201d'; x.beginPath(); x.arc(cx, cy, 168, 0, Math.PI * 2); x.arc(cx, cy, 152, 0, Math.PI * 2, true); x.fill();
+  m.fillStyle = '#fff'; m.beginPath(); m.arc(cx, cy, 168, 0, Math.PI * 2); m.fill();
   x.save();
-  x.translate(cx, cy); x.scale(.62, .62); x.translate(-256, -256);
-  x.shadowColor = 'rgba(0,0,0,.4)'; x.shadowBlur = 14; x.shadowOffsetY = 6;
-  const card = (rx, ry, a, px, py, col) => { x.save(); x.translate(px, py); x.rotate(a * Math.PI / 180); x.translate(-px, -py); x.fillStyle = col; x.beginPath(); x.roundRect(rx, ry, 214, 300, 24); x.fill(); x.restore(); };
+  x.translate(cx, cy); x.scale(.56, .56); x.translate(-256, -256);
+  x.shadowColor = 'rgba(0,0,0,.3)'; x.shadowBlur = 10; x.shadowOffsetY = 5;
+  const card = (rx, ry, a, ox, oy, col) => { x.save(); x.translate(ox, oy); x.rotate(a * Math.PI / 180); x.translate(-ox, -oy); x.fillStyle = col; x.beginPath(); x.roundRect(rx, ry, 214, 300, 24); x.fill(); x.restore(); };
   card(120, 108, -12, 227, 258, '#3fc1aa');
   card(178, 104, 7, 285, 254, '#ffffff');
   x.shadowColor = 'transparent';
-  x.translate(285, 254); x.rotate(7 * Math.PI / 180); x.translate(-285, -254);
+  x.strokeStyle = '#10201d'; x.lineWidth = 8;
+  x.save(); x.translate(285, 254); x.rotate(7 * Math.PI / 180); x.translate(-285, -254);
+  x.beginPath(); x.roundRect(178, 104, 214, 300, 24); x.stroke();
   x.translate(-14, 2); x.scale(.96, .96);
   x.fillStyle = '#10201d';
   x.fill(new Path2D('M226 164h46v74l62-74h56l-72 82 76 94h-58l-64-84v84h-46z'));
+  x.restore();
   x.restore();
   return { img, mask };
 }
@@ -560,7 +545,7 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   const texFront = texture(drawFront(def, logo, art));
   const texBack = texture(drawBack(def));
-  const cardBack = drawCardBack(def);
+  const cardBack = drawCardBack();
   const texCardBack = texture(cardBack.img), texCardMask = texture(cardBack.mask);
   const texCards = images.map((img, i) => texture(img || drawPlainCard(cards[i])));
 
