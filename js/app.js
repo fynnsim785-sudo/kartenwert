@@ -10,7 +10,7 @@ const CENTS = 100;
 const DISCOUNT_MAX = 10;
 function discountOf(card) {
   const ident = cardIdent(card);
-  if (isDeal(card)) return dealTaken(card) ? 0 : DEAL_PCT;
+  if (isDeal(card)) return dealTaken() ? 0 : DEAL_PCT;
   if (state.discountUsed.includes(ident)) return 0;
   let h = Math.floor(Date.now() / 604800000);
   for (const ch of ident) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -676,7 +676,7 @@ function renderProfile() {
       <p>All cards are digital only. You get them from packs, by buying or in auctions. You cannot add your own real cards. Cards from packs can be auctioned at any time.</p>
       <p>Auctions only use app balance.</p>
       <p>Your collection, themes and name are stored only on this device.</p>
-      <p>Version 1.11.0</p>
+      <p>Version 1.11.1</p>
     </details>`;
 }
 
@@ -909,7 +909,7 @@ async function sellBack(key) {
 
 // ---------- Rabatt des Tages ----------
 // Jeden Tag 3 Karten aus verschiedenen Sets 20 % günstiger, nur Karten zwischen 2 € und 100 €.
-// Jede Tageskarte gibt es pro Tag einmal mit Rabatt, sonst ließe sich über den Rückverkauf beliebig Geld machen.
+// Pro Tag lässt sich nur eines der drei Angebote kaufen (vom Betreiber so gewünscht), sonst ließe sich über den Rückverkauf beliebig Geld machen.
 const DEAL_PCT = 20, DEAL_MIN = 2, DEAL_MAX = 100, DEAL_COUNT = 3;
 // Zufall, der für alle am selben Tag gleich ausfällt
 function seeded(text) {
@@ -932,7 +932,9 @@ function shuffleWith(list, rnd) {
 }
 const dealsToday = () => (state.deals && state.deals.day === today() ? state.deals.cards : []);
 const isDeal = card => dealsToday().some(c => cardIdent(c) === cardIdent(card));
-const dealTaken = card => !!state.dealsUsed && state.dealsUsed.day === today() && state.dealsUsed.ids.includes(cardIdent(card));
+const dealBought = card => !!state.dealsUsed && state.dealsUsed.day === today() && state.dealsUsed.ids.includes(cardIdent(card));
+// Ist heute schon ein Angebot gekauft, gilt der Rabatt für keines mehr.
+const dealTaken = () => !!state.dealsUsed && state.dealsUsed.day === today() && state.dealsUsed.ids.length > 0;
 function markDeal(card) {
   if (!state.dealsUsed || state.dealsUsed.day !== today()) state.dealsUsed = { day: today(), ids: [] };
   state.dealsUsed.ids.push(cardIdent(card));
@@ -973,12 +975,13 @@ function dealsEnd() {
 }
 function dealsHtml() {
   const cards = dealsToday();
-  return `<div class="head"><h2>Deals of the day</h2><span class="muted small dealtime">New in ${dealsEnd()}</span></div>
+  const used = dealTaken();
+  return `<div class="head"><h2>Deals of the day</h2><span class="muted small dealtime">${used ? 'Next deal' : '1 per day · ends'} in ${dealsEnd()}</span></div>
     ${cards.length ? `<div class="deals stag">${cards.map(c => {
-      const taken = dealTaken(c);
+      const bought = dealBought(c), taken = used;
       const now = cents(c.price) - Math.round(cents(c.price) * DEAL_PCT / 100);
       return `<button class="dealcard ${taken ? 'taken' : ''}" data-deal="${esc(c.id)}">
-        <span class="pic">${cardImg(c)}<span class="off">${taken ? 'Bought' : '−' + DEAL_PCT + '%'}</span></span>
+        <span class="pic">${cardImg(c)}<span class="off">${bought ? 'Bought' : taken ? 'Tomorrow' : '−' + DEAL_PCT + '%'}</span></span>
         <span class="name">${esc(c.name)}</span>
         <span class="sub">${esc(c.set)}</span>
         <span class="prices"><s>${money.format(c.price)}</s><b>${eur(now)}</b></span>
@@ -991,7 +994,7 @@ function paintDeals() {
 }
 function openDeal(id) {
   const card = dealsToday().find(c => c.id === id);
-  if (card) openPreview(card, '', true);
+  if (card) openPreview(card, dealTaken() ? `You already used today's deal. New deals in ${dealsEnd()}.` : '', true);
 }
 
 // Die Pack-Regale im Markt.
