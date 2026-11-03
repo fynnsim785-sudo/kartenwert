@@ -118,9 +118,9 @@ void main(){
 const CARD_FS = `#version 300 es
 precision highp float;
 in vec2 vUv; in vec3 vP;
-uniform sampler2D uTex,uBack;
+uniform sampler2D uTex,uBack,uBackMask;
 uniform vec3 uCam,uLight;
-uniform float uDim,uHolo,uTime,uAura;
+uniform float uDim,uHolo,uTime,uAura,uSweep;
 out vec4 o;
 ${NOISE}
 vec3 rainbow(float h){return .5+.5*cos(6.2831*(h+vec3(0.,.33,.67)));}
@@ -149,11 +149,18 @@ void main(){
       float sparkle=step(.965,tw)*pow(.5+.5*sin(uTime*3.5+tw*40.+R.x*22.),8.);
       col+=uHolo*(foil*.2*(col+.12)+sparkle*.9);
     }
+    // Lichtstreif, der nach dem Umdrehen einmal schräg über die Karte läuft
+    if(uSweep>0.&&uSweep<1.){
+      float pos=vUv.x*.55+vUv.y*.45;
+      float b=exp(-pow((pos-(uSweep*1.5-.25))*10.,2.));
+      col=mix(col,vec3(1.),b*.3);
+    }
   }else{
-    col=texture(uBack,vec2(1.-vUv.x,vUv.y)).rgb;
+    vec2 bu=vec2(1.-vUv.x,vUv.y);
+    col=texture(uBack,bu).rgb;
     vec3 H=normalize(normalize(uLight)+V);
     vec3 R=reflect(-V,N);
-    float goldMask=smoothstep(.12,.3,col.r-col.b)*smoothstep(.35,.65,col.r);
+    float goldMask=texture(uBackMask,bu).r;
     float sweep=pow(.5+.5*sin(R.x*9.+R.y*6.+uTime*.7+vUv.y*4.),7.);
     col+=goldMask*(sweep*.9+pow(max(dot(N,H),0.),24.)*.6)*vec3(1.,.86,.5);
     col+=pow(max(dot(N,H),0.),40.)*.12;
@@ -375,97 +382,90 @@ function drawBack(def) {
   return c;
 }
 
-// Rückseite der verdeckten Karten: Nachtblau mit Goldprägung, Guilloche-Muster wie auf Geldscheinen und Wappen in der Mitte.
-function drawCardBack() {
-  const W = 512, H = 717;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const x = c.getContext('2d');
+// Rückseite der verdeckten Karten in den Farben des Packs: Goldrand, Druckraster und das KartenWert-Zeichen in der Mitte.
+// Zweites Bild: Maske der Goldteile, nur die glänzen im Licht.
+function drawCardBack(def) {
+  const W = 768, H = 1075, cx = W / 2, cy = H / 2;
+  const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
+  const img = mk(), mask = mk();
+  const x = img.getContext('2d'), m = mask.getContext('2d');
+  m.fillStyle = '#000'; m.fillRect(0, 0, W, H);
+  const [c1, c2] = def.colors;
   const gold = (y0, y1) => {
     const gr = x.createLinearGradient(0, y0, 0, y1);
-    gr.addColorStop(0, '#fff4c2'); gr.addColorStop(.35, '#f0c45a'); gr.addColorStop(.6, '#b07a22'); gr.addColorStop(1, '#f6d77c');
+    gr.addColorStop(0, '#fff1bd'); gr.addColorStop(.35, '#e8bb52'); gr.addColorStop(.6, '#a8741f'); gr.addColorStop(1, '#f3d27a');
     return gr;
   };
-  // Grund
-  const base = x.createRadialGradient(W / 2, H / 2, 20, W / 2, H / 2, H * .7);
-  base.addColorStop(0, '#16385a'); base.addColorStop(.55, '#0b1d33'); base.addColorStop(1, '#050c17');
-  x.fillStyle = base; x.fillRect(0, 0, W, H);
+  // Goldteile kommen in beide Bilder
+  const both = draw => { draw(x, true); m.save(); draw(m, false); m.restore(); };
+  const ink = (ctx, isImg, y0, y1) => isImg ? gold(y0, y1) : '#fff';
+
   // Rand
-  x.fillStyle = gold(0, H);
-  x.beginPath(); x.roundRect(10, 10, W - 20, H - 20, 26); x.fill();
-  x.fillStyle = base;
-  x.beginPath(); x.roundRect(22, 22, W - 44, H - 44, 18); x.fill();
-  x.strokeStyle = 'rgba(240,196,90,.55)'; x.lineWidth = 2;
-  x.beginPath(); x.roundRect(34, 34, W - 68, H - 68, 12); x.stroke();
-  // Guilloche: viele feine Wellenkreise
+  x.fillStyle = shade(c2, .55); x.fillRect(0, 0, W, H);
+  both((ctx, i) => { ctx.strokeStyle = ink(ctx, i, 0, H); ctx.lineWidth = 7; ctx.beginPath(); ctx.roundRect(16, 16, W - 32, H - 32, 34); ctx.stroke(); });
+  // Innenfeld
+  const fx = 48, fy = 48, fw = W - 96, fh = H - 96;
+  const field = x.createRadialGradient(cx, cy * .92, 30, cx, cy, H * .62);
+  field.addColorStop(0, shade(c1, -.25)); field.addColorStop(.45, c1); field.addColorStop(1, shade(c2, .35));
   x.save();
-  x.beginPath(); x.roundRect(36, 36, W - 72, H - 72, 10); x.clip();
-  x.translate(W / 2, H / 2);
-  for (let k = 0; k < 26; k++) {
-    x.strokeStyle = k % 2 ? 'rgba(240,196,90,.16)' : 'rgba(120,200,220,.12)';
-    x.lineWidth = 1.2;
-    x.beginPath();
-    const r0 = 70 + k * 11, amp = 9 + (k % 5) * 3, lobes = 12 + (k % 3) * 6;
-    for (let i = 0; i <= 720; i++) {
-      const t = i / 720 * Math.PI * 2;
-      const r = r0 + amp * Math.sin(lobes * t + k * .7);
-      const px = Math.cos(t) * r * .82, py = Math.sin(t) * r * 1.12;
-      if (i) x.lineTo(px, py); else x.moveTo(px, py);
+  x.beginPath(); x.roundRect(fx, fy, fw, fh, 22); x.clip();
+  x.fillStyle = field; x.fillRect(fx, fy, fw, fh);
+  // Strahlen
+  x.save(); x.translate(cx, cy);
+  for (let i = 0; i < 40; i++) {
+    x.rotate(Math.PI * 2 / 40);
+    x.fillStyle = i % 2 ? 'rgba(255,255,255,.075)' : 'rgba(0,0,0,.05)';
+    x.beginPath(); x.moveTo(0, 0); x.lineTo(-48, -H); x.lineTo(48, -H); x.fill();
+  }
+  x.restore();
+  // Druckraster: Punkte werden nach außen größer
+  x.fillStyle = 'rgba(0,0,0,.2)';
+  for (let y = fy + 7; y < fy + fh; y += 13) for (let xx = fx + 7 + ((y / 13) % 2) * 6.5; xx < fx + fw; xx += 13) {
+    const d = Math.hypot(xx - cx, y - cy) / (H * .55);
+    const r = Math.max(0, d - .35) * 6.5;
+    if (r > .3) { x.beginPath(); x.arc(xx, y, Math.min(r, 5.5), 0, Math.PI * 2); x.fill(); }
+  }
+  // Ringe um die Mitte
+  x.strokeStyle = 'rgba(255,255,255,.16)'; x.lineWidth = 2;
+  for (const r of [232, 262, 330]) { x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.stroke(); }
+  x.restore();
+  // feine Goldlinie im Feld und Rauten in den Ecken
+  both((ctx, i) => {
+    ctx.strokeStyle = ink(ctx, i, 0, H); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.roundRect(fx + 12, fy + 12, fw - 24, fh - 24, 14); ctx.stroke();
+    ctx.fillStyle = ink(ctx, i, 0, H);
+    for (const [px, py] of [[fx + 12, fy + 12], [fx + fw - 12, fy + 12], [fx + 12, fy + fh - 12], [fx + fw - 12, fy + fh - 12]]) {
+      ctx.beginPath(); ctx.moveTo(px, py - 15); ctx.lineTo(px + 15, py); ctx.lineTo(px, py + 15); ctx.lineTo(px - 15, py); ctx.closePath(); ctx.fill();
     }
-    x.stroke();
-  }
-  // Strahlen hinter dem Wappen
-  for (let i = 0; i < 32; i++) {
-    x.rotate(Math.PI * 2 / 32);
-    x.fillStyle = i % 2 ? 'rgba(240,196,90,.22)' : 'rgba(240,196,90,.07)';
-    x.beginPath(); x.moveTo(0, 0); x.lineTo(-9, -170); x.lineTo(9, -170); x.fill();
-  }
-  x.restore();
-  // Eckverzierungen
-  const corner = (cx, cy, sx, sy) => {
-    x.save(); x.translate(cx, cy); x.scale(sx, sy);
-    x.strokeStyle = gold(-30, 30); x.lineWidth = 3;
-    x.beginPath(); x.moveTo(0, 46); x.quadraticCurveTo(0, 0, 46, 0); x.stroke();
-    x.fillStyle = gold(-10, 10);
-    x.beginPath(); x.moveTo(16, 6); x.lineTo(22, 16); x.lineTo(16, 26); x.lineTo(10, 16); x.closePath(); x.fill();
-    x.restore();
-  };
-  corner(46, 46, 1, 1); corner(W - 46, 46, -1, 1); corner(46, H - 46, 1, -1); corner(W - 46, H - 46, -1, -1);
-  // Wappen
+  });
+  // Plakette in der Mitte
   x.save();
-  x.translate(W / 2, H / 2);
-  x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 22;
-  x.fillStyle = gold(-118, 118);
-  x.beginPath(); x.arc(0, 0, 118, 0, Math.PI * 2); x.fill();
-  x.shadowBlur = 0;
-  const inner = x.createRadialGradient(-20, -30, 10, 0, 0, 110);
-  inner.addColorStop(0, '#1d4f78'); inner.addColorStop(1, '#081628');
-  x.fillStyle = inner;
-  x.beginPath(); x.arc(0, 0, 104, 0, Math.PI * 2); x.fill();
-  x.strokeStyle = 'rgba(240,196,90,.7)'; x.lineWidth = 2;
-  x.beginPath(); x.arc(0, 0, 94, 0, Math.PI * 2); x.stroke();
-  // Sterne im Ring
-  x.fillStyle = gold(-100, 100);
-  for (let i = 0; i < 12; i++) {
-    const t = i / 12 * Math.PI * 2 - Math.PI / 2;
-    x.save(); x.translate(Math.cos(t) * 82, Math.sin(t) * 82); x.rotate(t);
-    x.beginPath();
-    for (let k = 0; k < 10; k++) { const r = k % 2 ? 2.4 : 6; const a = k / 10 * Math.PI * 2; x.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
-    x.fill(); x.restore();
-  }
-  x.font = '900 120px Lato, system-ui, sans-serif';
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.lineWidth = 7; x.strokeStyle = '#3d2608';
-  x.strokeText('K', 0, 6);
-  x.fillStyle = gold(-55, 60);
-  x.fillText('K', 0, 6);
+  x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 30; x.shadowOffsetY = 8;
+  x.fillStyle = shade(c2, .5);
+  x.beginPath(); x.arc(cx, cy, 196, 0, Math.PI * 2); x.fill();
   x.restore();
-  x.fillStyle = gold(H - 120, H - 80);
-  x.font = '800 22px Lato, system-ui, sans-serif';
-  x.textAlign = 'center';
-  x.fillText('K A R T E N W E R T', W / 2, H - 92);
-  x.fillText('★  ★  ★', W / 2, 104);
-  return c;
+  const disk = x.createRadialGradient(cx - 50, cy - 70, 20, cx, cy, 190);
+  disk.addColorStop(0, shade(c2, .1)); disk.addColorStop(1, shade(c2, .6));
+  x.fillStyle = disk; x.beginPath(); x.arc(cx, cy, 182, 0, Math.PI * 2); x.fill();
+  both((ctx, i) => {
+    ctx.strokeStyle = ink(ctx, i, cy - 200, cy + 200);
+    ctx.lineWidth = 14; ctx.beginPath(); ctx.arc(cx, cy, 190, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, 166, 0, Math.PI * 2); ctx.stroke();
+  });
+  // KartenWert-Zeichen: zwei Karten mit K, wie das App-Symbol
+  x.save();
+  x.translate(cx, cy); x.scale(.62, .62); x.translate(-256, -256);
+  x.shadowColor = 'rgba(0,0,0,.4)'; x.shadowBlur = 14; x.shadowOffsetY = 6;
+  const card = (rx, ry, a, px, py, col) => { x.save(); x.translate(px, py); x.rotate(a * Math.PI / 180); x.translate(-px, -py); x.fillStyle = col; x.beginPath(); x.roundRect(rx, ry, 214, 300, 24); x.fill(); x.restore(); };
+  card(120, 108, -12, 227, 258, '#3fc1aa');
+  card(178, 104, 7, 285, 254, '#ffffff');
+  x.shadowColor = 'transparent';
+  x.translate(285, 254); x.rotate(7 * Math.PI / 180); x.translate(-285, -254);
+  x.translate(-14, 2); x.scale(.96, .96);
+  x.fillStyle = '#10201d';
+  x.fill(new Path2D('M226 164h46v74l62-74h56l-72 82 76 94h-58l-64-84v84h-46z'));
+  x.restore();
+  return { img, mask };
 }
 
 function drawPlainCard(card) {
@@ -560,7 +560,8 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   const texFront = texture(drawFront(def, logo, art));
   const texBack = texture(drawBack(def));
-  const texCardBack = texture(drawCardBack());
+  const cardBack = drawCardBack(def);
+  const texCardBack = texture(cardBack.img), texCardMask = texture(cardBack.mask);
   const texCards = images.map((img, i) => texture(img || drawPlainCard(cards[i])));
 
   document.body.appendChild(box);
@@ -731,7 +732,12 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
       top.rz += ((scene.dragging ? -top.x * .2 : 0) - top.rz) * k;
       if (!top.flipping) top.ry += ((top.reveal && !top.flipped ? Math.PI : 0) + tiltY - top.ry) * k;
       top.rx += (tiltX - top.rx) * k;
-      top.bend = top.x * .22;
+      top.bend = top.x * .22 + (top.flipBend || 0);
+      // Ein Treffer zittert ab und zu, solange er verdeckt ist
+      if (top.hit && top.reveal && !top.flipped && !top.flipping) {
+        const ph = scene.time % 1.7;
+        if (ph < .4) top.rz += Math.sin(ph * 70) * .012 * (1 - ph / .4);
+      }
     }
     if (scene.tease) {
       scene.teaseT = (scene.teaseT || 0) + dt;
@@ -843,6 +849,8 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
       gl.uniform1f(cardP.u('uTime'), scene.time);
       gl.uniform1i(cardP.u('uTex'), 0);
       gl.uniform1i(cardP.u('uBack'), 1);
+      gl.uniform1i(cardP.u('uBackMask'), 2);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, texCardMask);
       gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texCardBack);
       gl.activeTexture(gl.TEXTURE0);
       for (let i = scene.cards.length - 1; i >= 0; i--) {
@@ -853,6 +861,7 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
         gl.uniform1f(cardP.u('uBend'), c.bend);
         gl.uniform1f(cardP.u('uHolo'), c.holo);
         gl.uniform1f(cardP.u('uAura'), c.aura);
+        gl.uniform1f(cardP.u('uSweep'), c.sweep || 0);
         const k = c.i - scene.top;
         gl.uniform1f(cardP.u('uDim'), c.free || k <= 0 ? 1 : Math.max(.62, 1 - k * .1 * scene.group.spread));
         // Sobald das Pack weg ist, zählt nur die Reihenfolge, sonst schneiden sich gekippte Karten mit der nächsten.
@@ -1130,14 +1139,19 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
     info.hidden = true;
     c.aura = 0;
     // Anlauf: Die Karte zieht sich zurück, dann dreht sie sich
-    await tw(190, t => { c.s = lerp(1, .92, t); c.ry = Math.PI + t * .25; }, inOut);
+    await tw(190, t => { c.s = lerp(1, .92, t); c.ry = Math.PI + t * .25; c.flipBend = -t * .12; }, inOut);
     sfx.flip();
     sfx.reveal(c.hit);
     if (navigator.vibrate) navigator.vibrate(c.hit ? [30, 40, 70] : 25);
     tw(560, t => { c.s = lerp(.92, c.hit ? 1.06 : 1.02, t); }, outBack);
+    // Beim Drehen hebt sich die Karte an und biegt sich wie echter Karton
+    tw(560, (t, raw) => { c.z = Math.sin(raw * Math.PI) * .32; c.flipBend = Math.sin(raw * Math.PI) * .26 - .12 * (1 - raw); }, t => t);
     await tw(560, t => { c.ry = lerp(Math.PI + .25, 0, t); }, outBack);
+    c.z = 0; c.flipBend = 0;
     c.flipped = true;
     c.flipping = false;
+    c.sweep = .001;
+    tw(c.hit ? 900 : 650, t => { c.sweep = t; }, inOut);
     if (c.hit) {
       scene.rayCol = [1, .84, .42];
       scene.flash = .4;
@@ -1162,7 +1176,8 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
       const worldPerPx = () => vis.w / box.clientWidth;
       const enterCard = () => {
         const c = scene.cards[scene.top];
-        c.x = 0; c.y = 0;
+        // Die nächste Karte rutscht vom Stapel nach oben
+        c.x = 0; c.y = -.07;
         scene.dragX = 0; scene.dragY = 0;
         if (c.reveal && !c.flipped) {
           c.aura = c.hit ? 1 : c.i === cards.length - 1 ? .35 : 0;
