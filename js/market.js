@@ -42,7 +42,11 @@ export const proofFinish = (secret, nonce, frames) => rpc('kw_proof_finish', { p
 
 // Auktionen
 export const auctions = secret => rpc('kw_auctions_open', { p_secret: secret });
-export const auctionCreate = (secret, card, start, hours) => rpc('kw_auction_create', { p_secret: secret, p_game: card.game, p_card_id: card.id, p_start: start, p_hours: hours });
+// Meldet eine Karte aus einem Pack an den Server, damit sie später versteigert werden kann. Ungeprüft.
+export const packClaim = (secret, card) => rpc('kw_pack_claim', {
+  p_secret: secret, p_game: card.game, p_card_id: card.id, p_name: card.name, p_set: card.set || '', p_number: card.number || '', p_image: card.image || '',
+});
+export const auctionCreate =(secret, card, start, hours) => rpc('kw_auction_create', { p_secret: secret, p_game: card.game, p_card_id: card.id, p_start: start, p_hours: hours });
 export const bid = (secret, id, amount, ledger) => rpc('kw_bid', { p_secret: secret, p_auction: id, p_amount: amount, p_ledger: ledger });
 export const auctionCancel = (secret, id) => rpc('kw_auction_cancel', { p_secret: secret, p_auction: id });
 export const results = secret => rpc('kw_results_open', { p_secret: secret });

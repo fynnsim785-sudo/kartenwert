@@ -298,7 +298,8 @@ function openCard(key) {
         <div><span>Gekauft für</span><b>${money.format(c.buyPrice)}</b></div>
         <div><span>${profitOf(c) < 0 ? 'Verlust' : 'Gewinn'}</span><b>${profitOf(c) < 0 ? '-' : '+'}${eur(Math.abs(profitOf(c)))}</b></div>
       </div>
-      <div class="btns"><button class="btn" data-sell-back="${esc(c.key)}"><span>Verkaufen · ${money.format(c.price || 0)}</span></button></div>`
+      <div class="btns"><button class="btn" data-sell-back="${esc(c.key)}"><span>Verkaufen · ${money.format(c.price || 0)}</span></button></div>
+      ${c.fromPack && ui.marketReady ? `<div class="btns"><button class="btn sec" data-auction-form="${esc(c.key)}" ${auctionReady(c) ? '' : 'disabled'}>${auctionReady(c) ? 'Versteigern' : `Versteigern ab ${new Date(c.boughtAt + DAY).toLocaleString('de-DE', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`}</button></div>` : ''}`
       : `<p class="note ${c.verified ? 'ok' : 'warn'}" style="margin:0">${c.verified ? 'In deiner Sammlung' : 'Zählt nicht. Kaufe die Karte oder ziehe sie aus einem Pack.'}</p>`}
     <div class="btns"><button class="btn sec" data-remove="${esc(c.key)}">Aus der Sammlung entfernen</button></div></div>`;
   modal.hidden = false;
@@ -566,10 +567,10 @@ function renderProfile() {
     <details class="facts"><summary><span>Infos</span>${ICON.chevron}</summary>
       <p>Das Guthaben ist nur eine Anzeige in der App. Du kannst es nicht abheben oder außerhalb der App ausgeben.</p>
       <p>Preise kommen von Cardmarket, TCGplayer, Scryfall und YGOPRODeck und können veraltet sein.</p>
-      <p>Alle Karten sind nur digital. Du bekommst sie aus Packs, durch Kauf oder in Auktionen. Eigene echte Karten kann man nicht hinzufügen.</p>
+      <p>Alle Karten sind nur digital. Du bekommst sie aus Packs, durch Kauf oder in Auktionen. Eigene echte Karten kann man nicht hinzufügen. Karten aus Packs kannst du 24 Stunden nach dem Öffnen versteigern.</p>
       <p>Auktionen laufen nur mit App-Guthaben.</p>
       <p>Sammlung und Name liegen nur auf diesem Gerät. Fotos werden nie hochgeladen.</p>
-      <p>Version 1.8.0</p>
+      <p>Version 1.8.1</p>
     </details>`;
 }
 
@@ -612,7 +613,8 @@ async function collectResults() {
       logEvent('verkauf', card, r.amount);
       toast(`${r.name} versteigert für ${eur(r.amount)}`);
     } else {
-      addToCollection(card, true, null);
+      // Zurück aus der eigenen Auktion: darf gleich wieder versteigert werden.
+      addToCollection({ ...card, fromPack: 'Auktion', boughtAt: 0 }, true, null);
       toast(`Kein Gebot: ${r.name} ist zurück in deiner Sammlung.`);
     }
   }
@@ -707,10 +709,49 @@ async function doAuctionCancel(id) {
   try {
     const l = await market.auctionCancel(state.secret, id);
     const fresh = await getCard(l.game, l.card_id).catch(() => null);
-    addToCollection({ ...(fresh || fromListing(l)), fromServer: true }, true, null);
+    addToCollection({ ...(fresh || fromListing(l)), fromServer: true, fromPack: 'Auktion', boughtAt: 0 }, true, null);
     closeModal();
     toast('Auktion zurückgezogen.');
     await showMarket();
+  } catch (e) { toast(e.message); }
+}
+
+// Pack-Karten lassen sich 24 Stunden nach dem Öffnen versteigern, so verlangt es auch der Server.
+const DAY = 24 * 60 * 60 * 1000;
+const auctionReady = c => !!c.fromPack && Date.now() - (c.boughtAt || 0) >= DAY;
+
+function openAuctionForm(key) {
+  const c = state.cards.find(x => x.key === key);
+  if (!c || !auctionReady(c)) return;
+  ui.auctionHours = 24;
+  modal.innerHTML = `<div class="sheet">
+    <button class="back" data-open="${esc(c.key)}" aria-label="Zurück">${ICON.back}</button>
+    <h3 class="center">Versteigern</h3>
+    <div class="hit" style="margin-top:12px">${cardImg(c)}<div class="info"><h3>${esc(c.name)}</h3><span class="muted small">${esc(c.set)}</span>
+      <span class="muted small">Marktpreis ${money.format(c.price || 0)}</span></div></div>
+    <div class="head" style="margin-top:0"><h2>Startpreis</h2></div>
+    <div class="fieldwrap"><input class="field" id="auctionStart" type="number" min="0.01" max="100000" step="0.01" value="${Math.max(0.01, (c.price || 0) * .5).toFixed(2)}" aria-label="Startpreis in Euro"><span>€</span></div>
+    <div class="head"><h2>Laufzeit</h2></div>
+    <div class="ranges hours">${[[1, '1 Std'], [24, '1 Tag'], [72, '3 Tage']].map(([h, t]) => `<button data-hours="${h}" class="${h === 24 ? 'on' : ''}">${t}</button>`).join('')}</div>
+    <div class="btns"><button class="btn" data-auction-create="${esc(c.key)}">Auktion starten</button></div>
+    <p class="note" style="margin:12px 0 0">Wer am meisten bietet, bekommt die digitale Karte, du das App-Guthaben. Ohne Gebot bekommst du die Karte zurück.</p>
+  </div>`;
+  modal.hidden = false;
+}
+
+async function doAuctionCreate(key) {
+  const c = state.cards.find(x => x.key === key);
+  const start = Math.round(Number(document.getElementById('auctionStart').value) * CENTS);
+  if (!c) return;
+  if (!(start >= 1 && start <= 10000000)) { toast('Gib einen Startpreis von 0,01 € bis 100.000 € ein.'); return; }
+  try {
+    await market.packClaim(state.secret, c);
+    await market.auctionCreate(state.secret, c, start, ui.auctionHours || 24);
+    state.cards = state.cards.filter(x => x.key !== key);
+    save();
+    closeModal();
+    toast('Deine Auktion läuft.');
+    switchTab('market');
   } catch (e) { toast(e.message); }
 }
 
@@ -800,6 +841,8 @@ async function buyPack(id, button) {
       const share = worth ? def.price * (c.price || 0) / worth : def.price / cards.length;
       addToCollection({ ...c, hist: {}, buyPrice: share, boughtAt: Date.now(), fromPack: def.name }, true, null);
     }
+    // Beim Server melden, damit die Karten nach 24 Stunden versteigert werden können. Klappt das nicht, wird es beim Versteigern nachgeholt.
+    if (ui.marketReady) for (const c of cards) market.packClaim(state.secret, c).catch(() => {});
     logEvent('pack', { name: def.name, image: cards[cards.length - 1].image }, -price);
     save();
     closeModal();
@@ -1086,6 +1129,12 @@ document.addEventListener('click', e => {
     state.watch = state.watch.includes(d.watch) ? state.watch.filter(w => w !== d.watch) : [...state.watch, d.watch];
     save(); openListing(d.watch); renderMarket();
   }
+  else if (d.auctionForm) openAuctionForm(d.auctionForm);
+  else if (d.hours) {
+    ui.auctionHours = Number(d.hours);
+    modal.querySelectorAll('[data-hours]').forEach(x => x.classList.toggle('on', x === b));
+  }
+  else if (d.auctionCreate) doAuctionCreate(d.auctionCreate);
   else if (d.auction) openAuction(d.auction);
   else if (d.bid) doBid(d.bid);
   else if (d.auctionCancel) doAuctionCancel(d.auctionCancel);
