@@ -1,4 +1,4 @@
-﻿import { GAMES, today, searchCards, getCard, getSets, getSet, hq } from './cards.js';
+import { GAMES, today, searchCards, getCard, getSets, getSet, hq } from './cards.js';
 import { identify, checkPhoto } from './scan.js';
 import { openScanner } from './live.js';
 import { runProof } from './proof.js';
