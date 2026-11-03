@@ -355,16 +355,16 @@ function drawFront(def, logo, art) {
     const lines = nameLines(def.name);
     x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
     let size = 110;
-    const font = () => `italic 900 ${size}px Lato, system-ui, sans-serif`;
+    const font = () => `${size}px PackFont, Lato, sans-serif`;
     x.font = font();
     while ((Math.max(...lines.map(l => x.measureText(l).width)) > W * .86 || size * 1.02 * lines.length > bh * .9) && size > 30) { size -= 2; x.font = font(); }
     const lh = size * 1.02, y0 = -(lines.length - 1) * lh / 2;
-    const edge = shade(def.colors[1], .45);
+    // Gelb mit dickem blauem Rand und harter Kante darunter
     lines.forEach((l, i) => {
-      const y = y0 + i * lh;
-      x.fillStyle = shade(def.colors[1], .6); x.fillText(l, size * .05, y + size * .07);
-      x.lineWidth = size * .2; x.strokeStyle = edge; x.strokeText(l, 0, y);
-      x.fillStyle = '#fff'; x.fillText(l, 0, y);
+      const y = y0 + i * lh + size * .06;
+      x.lineWidth = size * .3; x.strokeStyle = '#142a5c'; x.strokeText(l, size * .03, y + size * .1);
+      x.strokeStyle = '#2a4f9e'; x.strokeText(l, 0, y);
+      x.fillStyle = '#ffcb05'; x.fillText(l, 0, y);
     });
   }
   x.restore();
@@ -573,6 +573,7 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
   // Bilder laden, bevor irgendetwas erscheint.
   const [logo, art, ...images] = await Promise.all([loadImage(def.logo), loadImage(def.art && `${def.art}/high.webp`), ...cards.map(c => loadImage(c.image))]);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  await document.fonts.load('80px PackFont').catch(() => {});
   const texFront = texture(drawFront(def, logo, art));
   const texBack = texture(drawBack(def));
   const texCardBack = texture(drawCardBack());
