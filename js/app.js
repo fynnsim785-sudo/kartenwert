@@ -1,7 +1,4 @@
 import { GAMES, today, searchCards, getCard, getSets, getSet, hq } from './cards.js';
-import { identify, checkPhoto } from './scan.js';
-import { openScanner } from './live.js';
-import { runProof } from './proof.js';
 import { loadFeed, topCards, findFeedCard } from './feed.js';
 import { countTo, flyToCollection, attachTilt, drawChart, enterPage, observeReveal, attachDrag } from './fx.js';
 import { ICON } from './icons.js';
@@ -215,7 +212,8 @@ function feedChanged() {
   feedTimer = setTimeout(paintFeed, 350);
 }
 
-const scanCta = title => `<button class="scancta" data-camera>${ICON.camera}<span>${title}</span></button>`;
+// Karten gibt es nur aus Packs, Käufen und Auktionen: Der Hinweis führt in den Markt.
+const packCta = title => `<button class="scancta" data-go="market">${ICON.stack}<span>${title}</span></button>`;
 
 // ---------- Start ----------
 function itemRow(c, ch) {
@@ -247,7 +245,7 @@ function renderHome(animate = true) {
     </section>`;
 
   if (!cards.length) {
-    view.innerHTML = `${head}${scanCta('Erste Karte scannen')}<div id="feedbox" data-kind="home">${feedHtml('home')}</div>`;
+    view.innerHTML = `${head}${packCta('Erstes Pack öffnen')}<div id="feedbox" data-kind="home">${feedHtml('home')}</div>`;
   } else if (ui.overview === 'performance') {
     const gain = withChange.filter(g => g.ch && g.ch.diff > 0).sort((a, b) => b.ch.pct - a.ch.pct);
     const loss = withChange.filter(g => g.ch && g.ch.diff < 0).sort((a, b) => a.ch.pct - b.ch.pct);
@@ -301,11 +299,7 @@ function openCard(key) {
         <div><span>${profitOf(c) < 0 ? 'Verlust' : 'Gewinn'}</span><b>${profitOf(c) < 0 ? '-' : '+'}${eur(Math.abs(profitOf(c)))}</b></div>
       </div>
       <div class="btns"><button class="btn" data-sell-back="${esc(c.key)}"><span>Verkaufen · ${money.format(c.price || 0)}</span></button></div>`
-      : `<p class="note ${c.verified ? 'ok' : 'warn'}" style="margin:0">${c.verified ? 'Gescannt' : 'Zählt nicht. Scanne oder kaufe die Karte.'}</p>`}
-    ${c.verified && c.buyPrice == null && ui.marketReady ? `<div class="head"><h2>Verkaufen</h2></div>
-      <div class="btns"><button class="btn" data-auction-form="${esc(c.key)}">Versteigern</button></div>
-      <div class="fieldwrap" style="margin-top:10px"><input class="field" id="sellPrice" type="number" min="0.01" max="100000" step="0.01" value="${Math.max(0.01, c.price || 0).toFixed(2)}" aria-label="Preis in Euro"><span>€</span></div>
-      <div class="btns"><button class="btn sec" data-sell="${esc(c.key)}">Zum Festpreis anbieten</button></div>` : ''}
+      : `<p class="note ${c.verified ? 'ok' : 'warn'}" style="margin:0">${c.verified ? 'In deiner Sammlung' : 'Zählt nicht. Kaufe die Karte oder ziehe sie aus einem Pack.'}</p>`}
     <div class="btns"><button class="btn sec" data-remove="${esc(c.key)}">Aus der Sammlung entfernen</button></div></div>`;
   modal.hidden = false;
   attachTilt(modal);
@@ -333,7 +327,6 @@ function openPreview(card, note) {
     ${discountCut(card) ? `<div class="deal"><span>Rabatt ${discountOf(card)} %</span><s>${money.format(card.price)}</s><b>${eur(cents(card.price) - discountCut(card))}</b></div>` : ''}
     <div class="btns">
       ${card.price ? `<button class="btn buy" data-buy-card ${cents(card.price) - discountCut(card) > freeBalance() ? 'disabled' : ''}>${cents(card.price) - discountCut(card) > freeBalance() ? 'Nicht genug Guthaben' : `Kaufen`}</button>` : ''}
-      <button class="btn sec" data-go-scan>Scannen</button>
     </div></div>`;
   modal.hidden = false;
   attachTilt(modal);
@@ -394,11 +387,10 @@ function dexHtml() {
   return `<div class="head" style="margin-top:4px"><h2>Pokédex · ${dex.length}/${nf.format(DEX_TOTAL)}</h2><button class="link" data-show-sets>Alle Sets</button></div>
     ${dex.length ? `<div class="grid">${dex.map(([n, c]) => `
       <button class="tile" data-open="${esc(c.key)}">${cardImg(c)}<span class="name">${esc(c.name)}</span><span class="sub">Nr. ${n}</span></button>`).join('')}</div>`
-      : scanCta('Fang dein erstes Pokémon')}`;
+      : packCta('Fang dein erstes Pokémon im Pack')}`;
 }
 
 function renderScan() {
-  const photoUrl = ui.photo ? ui.photoUrl : null;
   let body;
   if (ui.found.length) {
     const tile = (c, i) => `
@@ -410,24 +402,13 @@ function renderScan() {
         <span class="qty">${hasCard(c) ? 'In deiner Sammlung' : c.number ? '#' + esc(c.number) : ''}</span>
         <span class="plus ${hasCard(c) ? 'has' : ''}">${hasCard(c) ? ICON.check : ICON.plus}</span>
       </button>`;
-    const top = ui.found[0];
-    body = ui.sure ? `
-      <div class="hit pop">${cardImg(top)}
-        <div class="info"><span class="tagline">Erkannt</span><h3>${esc(top.name)}</h3>
-          <span class="muted small">${esc(top.set)}${top.number ? ' · #' + esc(top.number) : ''}</span>
-          <span class="price">${top.price ? money.format(top.price) : 'Kein Preis'}</span>
-          ${hasCard(top) ? '<button class="btn sec" disabled>In deiner Sammlung</button>' : '<button class="btn" data-add="0">Hinzufügen</button>'}</div>
-      </div>
-      ${ui.found.length > 1 ? `<div class="head" style="margin-top:0"><h2>Andere Versionen</h2></div>
-      <div class="grid big stag">${ui.found.slice(1).map((c, i) => tile(c, i + 1)).join('')}</div>` : ''}`
-      : `<div class="grid big stag">${ui.found.map(tile).join('')}</div>`;
+    body = `<div class="grid big stag">${ui.found.map(tile).join('')}</div>`;
   } else if (ui.searchView === 'set' && ui.game === 'pokemon') {
     body = setHtml();
   } else if (ui.searchView === 'dex' && ui.game === 'pokemon') {
     body = dexHtml();
   } else {
-    body = `${scanCta('Karte scannen')}
-      <div class="head"><h2>Schnellfilter</h2></div>
+    body = `<div class="head"><h2>Schnellfilter</h2></div>
       <div class="qf" id="qfbox">${Object.entries(GAMES).map(([k, v]) => gameTile(k, v, 'game', ui.game === k)).join('')}</div>
       <div class="quick">${['Glurak', 'Pikachu', 'Mewtu', 'Evoli', 'Gengar', 'Lugia', 'Rayquaza'].map(q => `<button data-quick="${q}" data-quick-game="pokemon">${q}</button>`).join('')}</div>
       <div id="feedbox" data-kind="search">${feedHtml('search')}</div>
@@ -436,7 +417,6 @@ function renderScan() {
   }
   view.innerHTML = `
     <div class="searchbar">
-      <button class="round cam-btn" data-camera aria-label="Karte scannen">${ICON.camera}</button>
       <div class="search">
         <input id="q" placeholder="Karten suchen" aria-label="Kartenname" value="${esc(ui.q)}">
         ${ui.q ? `<button data-clear-search aria-label="Suche löschen">${ICON.close}</button>` : `<button data-search aria-label="Suchen">${ICON.search}</button>`}
@@ -446,15 +426,10 @@ function renderScan() {
     </div>
     <div class="filters">
       <button class="chip" data-games="game">${esc(GAMES[ui.game])}</button>
-      <span>
-        ${ui.found.length ? '<button class="link" data-show-sets>Zurück</button> · ' : ''}
-        <button class="link" data-pick>Aus Galerie</button>
-      </span>
+      <span>${ui.found.length ? '<button class="link" data-show-sets>Zurück</button>' : ''}</span>
     </div>
-    <input id="file" type="file" accept="image/*" hidden>
-    ${photoUrl ? `<div class="scanwrap ${ui.scanning ? 'scanning' : ''}"><img class="preview" src="${photoUrl}" alt="Dein Foto">${ui.scanning ? `<span id="scanstep">${esc(ui.scanStep || '')}</span>` : ''}</div>` : ''}
-    ${ui.status ? `<div class="note ${ui.status.level || ''}">${esc(ui.status.text)}${ui.status.reasons && ui.status.reasons.length ? `<ul>${ui.status.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}</div>` : ''}
-    ${ui.scanning ? '' : body}`;
+    ${ui.status ? `<div class="note ${ui.status.level || ''}">${esc(ui.status.text)}</div>` : ''}
+    ${body}`;
 }
 
 async function loadSets(lang) {
@@ -491,75 +466,12 @@ async function openSetCard(rawId) {
   } catch (e) { toast(e.message); }
 }
 
-async function openLive() {
-  try {
-    await openScanner({
-      game: ui.game,
-      hashes: state.hashes,
-      hasCard,
-      onAdd(card, hash, img) {
-        if (!addToCollection(card, true, hash)) return;
-        state.hashes.push(hash);
-        save();
-        flyToCollection(img, '+' + money.format(card.price || 0));
-      },
-      // Gleich nach dem Scannen versteigern: Karte öffnen und zum Preisfeld springen.
-      onAuction(card) {
-        const c = owned(card);
-        if (!c) return;
-        if (!ui.marketReady) { toast('Auktionen sind gerade nicht erreichbar. Die Karte liegt in deiner Sammlung.'); return; }
-        openCard(c.key);
-        const field = document.getElementById('sellPrice');
-        if (field) { field.scrollIntoView({ block: 'center', behavior: 'smooth' }); field.focus({ preventScroll: true }); }
-      },
-      onGallery() {
-        switchTab('scan');
-        document.getElementById('file').click();
-      },
-    });
-  } catch {
-    toast('Kein Kamera-Zugriff. Wähle ein Foto aus der Galerie.');
-  }
-}
-
-async function usePhoto(blob, source) {
-  if (ui.photoUrl) URL.revokeObjectURL(ui.photoUrl);
-  ui.photo = blob;
-  ui.photoUrl = URL.createObjectURL(blob);
-  ui.source = source;
-  ui.found = [];
-  ui.status = null;
-  ui.sure = false;
-  ui.scanning = true;
-  ui.scanStep = 'Karte wird erkannt …';
-  renderScan();
-  window.scrollTo(0, 0);
-  try {
-    const { cards, sure } = await identify(blob, ui.game, text => {
-      ui.scanStep = text;
-      const el = document.getElementById('scanstep');
-      if (el) el.textContent = text;
-    });
-    ui.found = cards;
-    ui.sure = sure;
-    ui.status = sure ? { text: 'Aus der Galerie: zählt nicht zur Sammlung.' }
-      : cards.length ? { level: 'warn', text: 'Nicht sicher erkannt. Welche Karte ist es?' }
-      : { level: 'warn', text: 'Keine Karte erkannt. Gib den Namen ein, oder fotografiere sie näher und von vorne.' };
-  } catch (e) {
-    ui.status = { level: 'warn', text: e.message };
-  }
-  ui.scanning = false;
-  if (ui.tab === 'scan') renderScan();
-}
-
 async function manualSearch() {
   const input = document.getElementById('q');
   ui.q = input.value;
   if (ui.q.trim().length < 2) return;
   ui.status = { text: 'Wird gesucht …' };
   ui.found = [];
-  ui.sure = false;
-  ui.photo = null;
   renderScan();
   try {
     ui.found = await searchCards(ui.game, ui.q, '', 24);
@@ -579,35 +491,14 @@ function addToCollection(card, verified, photoHash) {
   const hist = { ...(card.hist || {}) };
   hist[today()] = card.price;
   state.cards.unshift({ ...card, hist, verified, photoHash: photoHash || null, key: crypto.randomUUID(), addedAt: Date.now() });
-  if (verified && card.buyPrice == null && !card.fromServer) logEvent('scan', card, cents(card.price));
   save();
   return true;
 }
 
-async function addFound(i, from) {
+// Ein Suchtreffer öffnet die Karte: kaufen oder merken.
+function addFound(i) {
   const card = ui.found[i];
-  if (!card) return;
-  if (hasCard(card)) { openPreview(card, ''); return; }
-  // Ohne Foto gibt es nichts zu prüfen: Dann kann man die Karte kaufen oder merken.
-  if (!ui.photo) { openPreview(card, ''); return; }
-  const res = await checkPhoto(ui.photo, ui.source, card, state.hashes);
-  if (res.level === 'block') {
-    ui.status = { level: 'block', text: 'Foto abgelehnt.', reasons: res.reasons };
-    renderScan();
-    return;
-  }
-  const verified = res.level === 'ok';
-  addToCollection(card, verified, res.hash);
-  if (verified) state.hashes.push(res.hash);
-  save();
-  flyToCollection(from, verified ? '+' + money.format(card.price || 0) : '');
-  ui.found = [];
-  ui.photo = null;
-  ui.sure = false;
-  ui.status = verified
-    ? { level: 'ok', text: `${card.name} hinzugefügt: +${money.format(card.price || 0)}` }
-    : { level: 'warn', text: `${card.name} gemerkt. Galerie-Fotos zählen nicht zum Guthaben.` };
-  renderScan();
+  if (card) openPreview(card, '');
 }
 
 // ---------- Portfolio und Profil ----------
@@ -628,7 +519,7 @@ function renderPortfolio() {
         ${c.rarity ? `<span class="sub">${esc(c.rarity)}</span>` : ''}
         <span class="val">${money.format(c.price || 0)}</span>
         ${c.buyPrice != null ? `<span class="tag ${profitOf(c) < 0 ? 'lossTag' : 'gainTag'}">${profitOf(c) < 0 ? '-' : '+'}${eur(Math.abs(profitOf(c)))}</span>` : c.verified ? '' : '<span class="tag">Zählt nicht</span>'}
-      </button>`).join('')}</div>` : scanCta('Starte deine Sammlung')}
+      </button>`).join('')}</div>` : packCta('Starte deine Sammlung mit einem Pack')}
     <div id="feedbox" data-kind="portfolio">${feedHtml('portfolio')}</div>`;
 }
 
@@ -660,7 +551,7 @@ function renderProfile() {
     </div>
     <div class="head"><h2>Vitrine</h2>${top.length ? '<button class="link" data-go="portfolio">Alle</button>' : ''}</div>
     ${top.length ? `<div class="grid">${top.slice(0, 3).map(c => `<button class="tile" data-open="${esc(c.key)}">${cardImg(c)}<span class="name">${esc(c.name)}</span><span class="val">${money.format(c.price || 0)}</span></button>`).join('')}</div>`
-      : scanCta('Karte scannen')}
+      : packCta('Pack öffnen')}
     <div class="head"><h2>Fortschritt</h2></div>
     <div class="rows">
       <button class="prow" data-dex-go><span>Pokédex</span><em>${nf.format(dex)} / ${nf.format(DEX_TOTAL)}</em></button>
@@ -675,10 +566,10 @@ function renderProfile() {
     <details class="facts"><summary><span>Infos</span>${ICON.chevron}</summary>
       <p>Das Guthaben ist nur eine Anzeige in der App. Du kannst es nicht abheben oder außerhalb der App ausgeben.</p>
       <p>Preise kommen von Cardmarket, TCGplayer, Scryfall und YGOPRODeck und können veraltet sein.</p>
-      <p>Gekaufte und ersteigerte Karten sind nur digital. Zur Sammlung zählen Kamera-Scans mit Echtheitsprobe und Käufe, Galerie-Bilder nicht.</p>
-      <p>Auktionen laufen nur mit App-Guthaben. Geprüft wird auf dem Gerät, von den Fotos bleibt nur ein Fingerabdruck auf dem Server.</p>
+      <p>Alle Karten sind nur digital. Du bekommst sie aus Packs, durch Kauf oder in Auktionen. Eigene echte Karten kann man nicht hinzufügen.</p>
+      <p>Auktionen laufen nur mit App-Guthaben.</p>
       <p>Sammlung und Name liegen nur auf diesem Gerät. Fotos werden nie hochgeladen.</p>
-      <p>Version 1.7.5</p>
+      <p>Version 1.8.0</p>
     </details>`;
 }
 
@@ -823,54 +714,6 @@ async function doAuctionCancel(id) {
   } catch (e) { toast(e.message); }
 }
 
-// Der Server würfelt die Aufgaben der Probe und merkt sich danach, dass die Karte geprüft ist.
-async function ensureVerified(card) {
-  const start = await market.proofStart(state.secret, card);
-  if (start.verified) return true;
-  const proof = await runProof({ card, steps: start.steps });
-  if (!proof.ok) {
-    if (proof.reason) toast(proof.reason);
-    return false;
-  }
-  const res = await market.proofFinish(state.secret, start.nonce, proof.frames);
-  if (!res.verified) { toast(res.error || 'Die Probe wurde abgelehnt.'); return false; }
-  return true;
-}
-
-function openAuctionForm(key) {
-  const c = state.cards.find(x => x.key === key);
-  if (!c) return;
-  ui.auctionHours = 24;
-  modal.innerHTML = `<div class="sheet">
-    <button class="back" data-open="${esc(c.key)}" aria-label="Zurück">${ICON.back}</button>
-    <h3 class="center">Versteigern</h3>
-    <div class="hit" style="margin-top:12px">${cardImg(c)}<div class="info"><h3>${esc(c.name)}</h3><span class="muted small">${esc(c.set)}</span>
-      <span class="muted small">Marktpreis ${money.format(c.price || 0)}</span></div></div>
-    <div class="head" style="margin-top:0"><h2>Startpreis</h2></div>
-    <div class="fieldwrap"><input class="field" id="auctionStart" type="number" min="0.01" max="100000" step="0.01" value="${Math.max(0.01, (c.price || 0) * .5).toFixed(2)}" aria-label="Startpreis in Euro"><span>€</span></div>
-    <div class="head"><h2>Laufzeit</h2></div>
-    <div class="ranges hours">${[[1, '1 Std'], [24, '1 Tag'], [72, '3 Tage']].map(([h, t]) => `<button data-hours="${h}" class="${h === 24 ? 'on' : ''}">${t}</button>`).join('')}</div>
-    <div class="btns"><button class="btn" data-auction-create="${esc(c.key)}">Karte prüfen und starten</button></div>
-    <p class="note" style="margin:12px 0 0">Zum Schluss zeigst du die echte Karte vor der Kamera. Wer am meisten bietet, bekommt die digitale Karte, du das App-Guthaben.</p>
-  </div>`;
-  modal.hidden = false;
-}
-
-async function doAuctionCreate(key) {
-  const c = state.cards.find(x => x.key === key);
-  const start = Math.round(Number(document.getElementById('auctionStart').value) * CENTS);
-  if (!c) return;
-  if (!(start >= 1 && start <= 10000000)) { toast('Gib einen Startpreis von 0,01 € bis 100.000 € ein.'); return; }
-  try {
-    if (!await ensureVerified(c)) return;
-    await market.auctionCreate(state.secret, c, start, ui.auctionHours || 24);
-    state.cards = state.cards.filter(x => x.key !== key);
-    save();
-    closeModal();
-    toast('Deine Auktion läuft.');
-    switchTab('market');
-  } catch (e) { toast(e.message); }
-}
 const freeBalance = () => (ui.balance ?? START_BALANCE) + state.ledger;
 
 function logEvent(kind, card, amount) {
@@ -1069,21 +912,6 @@ async function searchMarket() {
   }
 }
 
-async function doSell(key) {
-  const c = state.cards.find(x => x.key === key);
-  const price = Math.round(Number(document.getElementById('sellPrice').value) * CENTS);
-  if (!c || !c.verified || !(price >= 1 && price <= 10000000)) { toast('Gib einen Preis von 0,01 € bis 100.000 € ein.'); return; }
-  try {
-    if (!await ensureVerified(c)) return;
-    await market.sell(state.secret, c, price);
-    state.cards = state.cards.filter(x => x.key !== key);
-    save();
-    closeModal();
-    toast('Deine Karte ist jetzt im Markt.');
-    switchTab('market');
-  } catch (e) { toast(e.message); }
-}
-
 function fromListing(l) {
   return { game: l.game, id: l.card_id, name: l.name, set: l.set_name, number: l.number, image: l.image, price: l.market_eur || 0, hist: {} };
 }
@@ -1212,15 +1040,13 @@ document.addEventListener('click', e => {
   }
   else if ('saved' in d) {
     ui.found = state.cards.filter(c => !c.verified);
-    ui.q = ''; ui.photo = null; ui.sure = false;
+    ui.q = '';
     ui.status = ui.found.length ? null : { text: 'Noch nichts gemerkt.' };
     renderScan();
   }
-  else if ('camera' in d) openLive();
-  else if ('pick' in d) document.getElementById('file').click();
   else if ('search' in d) manualSearch();
-  else if ('clearSearch' in d) { ui.q = ''; ui.found = []; ui.status = null; ui.photo = null; ui.searchView = 'sets'; renderScan(); }
-  else if ('showSets' in d) { ui.searchView = 'sets'; ui.found = []; ui.status = null; ui.photo = null; ui.q = ''; renderScan(); }
+  else if ('clearSearch' in d) { ui.q = ''; ui.found = []; ui.status = null; ui.searchView = 'sets'; renderScan(); }
+  else if ('showSets' in d) { ui.searchView = 'sets'; ui.found = []; ui.status = null; ui.q = ''; renderScan(); }
   else if ('allSets' in d) { ui.searchView = 'sets'; switchTab('scan'); }
   else if (d.quick) {
     ui.game = d.quickGame || 'pokemon';
@@ -1235,7 +1061,6 @@ document.addEventListener('click', e => {
   else if (d.setOpen) { ui.setLang = 'de'; if (ui.tab !== 'scan') switchTab('scan'); openSet(d.setOpen); }
   else if (d.setCard) openSetCard(d.setCard);
   else if (d.feed) { const c = findFeedCard(feed, d.feed); if (c) openPreview(c, ''); }
-  else if ('goScan' in d) { closeModal(); openLive(); }
   else if ('addPreview' in d) {
     const card = ui.preview;
     addToCollection(card, false, null);
@@ -1249,8 +1074,7 @@ document.addEventListener('click', e => {
   else if (d.sellBack) sellBack(d.sellBack);
   else if ('editName' in d) { ui.editName = true; renderProfile(); document.getElementById('nameInput')?.select(); }
   else if ('saveName' in d) saveName();
-  else if (d.add) addFound(Number(d.add), b.querySelector('img') || b.closest('.hit')?.querySelector('img'));
-  else if (d.sell) doSell(d.sell);
+  else if (d.add) addFound(Number(d.add));
   else if (d.listing) openListing(d.listing);
   else if (d.catalog) {
     const c = ui.catalog.find(x => x.id === d.catalog);
@@ -1262,12 +1086,6 @@ document.addEventListener('click', e => {
     state.watch = state.watch.includes(d.watch) ? state.watch.filter(w => w !== d.watch) : [...state.watch, d.watch];
     save(); openListing(d.watch); renderMarket();
   }
-  else if (d.auctionForm) openAuctionForm(d.auctionForm);
-  else if (d.hours) {
-    ui.auctionHours = Number(d.hours);
-    modal.querySelectorAll('[data-hours]').forEach(x => x.classList.toggle('on', x === b));
-  }
-  else if (d.auctionCreate) doAuctionCreate(d.auctionCreate);
   else if (d.auction) openAuction(d.auction);
   else if (d.bid) doBid(d.bid);
   else if (d.auctionCancel) doAuctionCancel(d.auctionCancel);
@@ -1275,9 +1093,6 @@ document.addEventListener('click', e => {
   else if (d.cancel) doCancel(d.cancel);
 });
 
-document.addEventListener('change', e => {
-  if (e.target.id === 'file' && e.target.files[0]) usePhoto(e.target.files[0], 'datei');
-});
 // Bilder blenden weich ein, sobald sie geladen sind.
 document.addEventListener('load', e => {
   if (e.target.tagName === 'IMG') e.target.classList.add('ok');
