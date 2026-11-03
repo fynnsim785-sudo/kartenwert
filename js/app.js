@@ -250,7 +250,7 @@ function renderHome(animate = true) {
   } else if (ui.overview === 'performance') {
     const gain = withChange.filter(g => g.ch && g.ch.diff > 0).sort((a, b) => b.ch.pct - a.ch.pct);
     const loss = withChange.filter(g => g.ch && g.ch.diff < 0).sort((a, b) => a.ch.pct - b.ch.pct);
-    const box = (title, list, empty) => `<section class="panel"><h2>${title}</h2><div class="rows">${list.length ? list.map(g => itemRow(g.c, g.ch)).join('') : `<div class="panelnote" style="padding-top:7px">${empty}</div>`}</div></section>`;
+    const box = (title, list, empty) => `<section class="panel"><h2>${title}</h2><div class="rows">${list.length ? list.map(g => itemRow(g.c, g.ch)).join('') : `<div class="panelnote" style="padding-top:8px">${empty}</div>`}</div></section>`;
     view.innerHTML = `${head}${rangeButtons('range', ui.range)}
       ${box('Winners', gain, 'No card in profit.')}
       ${box('Losers', loss, 'No card at a loss.')}`;
@@ -655,7 +655,7 @@ function renderProfile() {
       <p>All cards are digital only. You get them from packs, by buying or in auctions. You cannot add your own real cards. Cards from packs can be auctioned at any time.</p>
       <p>Auctions only use app balance.</p>
       <p>Your collection, themes and name are stored only on this device.</p>
-      <p>Version 1.9.7</p>
+      <p>Version 1.9.8</p>
     </details>`;
 }
 
@@ -766,7 +766,7 @@ function openAuction(id) {
     ${a.mine ? `<div class="btns">${a.bid_count ? '<p class="note" style="margin:0">Your card. It goes to the highest bid.</p>' : `<button class="btn sec" data-auction-cancel="${esc(a.id)}">Withdraw auction</button>`}</div>`
       : has ? '<p class="note" style="margin:12px 0 0">You already have this card.</p>'
       : `${a.leading ? '<p class="note ok" style="margin:12px 0 0">You are in the lead.</p>' : ''}
-        <div class="fieldwrap" style="margin-top:10px"><input class="field" id="bidValue" type="number" min="${(least / CENTS).toFixed(2)}" max="100000" step="0.01" value="${(least / CENTS).toFixed(2)}" aria-label="Your bid in euros"><span>€</span></div>
+        <div class="fieldwrap" style="margin-top:12px"><input class="field" id="bidValue" type="number" min="${(least / CENTS).toFixed(2)}" max="100000" step="0.01" value="${(least / CENTS).toFixed(2)}" aria-label="Your bid in euros"><span>€</span></div>
         <div class="btns"><button class="btn" data-bid="${esc(a.id)}">Bid</button></div>`}
     <p class="note" style="margin:12px 0 0">Digital card only, paid with app balance. Your bid is reserved and returned if someone outbids you.</p>
   </div>`;
