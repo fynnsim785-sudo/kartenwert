@@ -1,7 +1,6 @@
 // Pack öffnen als echte 3D-Szene (WebGL2): Folie mit Glanz, Riss der dem Finger folgt, Karten, Licht und Fetzen.
 // Ohne WebGL2 oder bei "weniger Bewegung" bleibt es bei der einfachen Fassung in packs.js.
 import { makeSound } from './packsound.js';
-import { nameLines } from './packs.js';
 
 const money = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -336,36 +335,22 @@ function drawFront(def, logo, art) {
   x.fillStyle = veil; x.fillRect(0, H * .62, W, H * .38);
   x.save();
   x.translate(W / 2, H * .795);
-  x.rotate(-.087);
-  // Farbiges Band hinter dem Namen mit weißen Kanten
-  const bh = H * .19;
-  x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 24; x.shadowOffsetY = 10;
-  const band = x.createLinearGradient(-W * .6, 0, W * .6, 0);
-  band.addColorStop(0, shade(def.colors[0], .2)); band.addColorStop(.5, def.colors[0]); band.addColorStop(1, shade(def.colors[0], .3));
-  x.fillStyle = band; x.fillRect(-W * .62, -bh / 2, W * 1.24, bh);
-  x.shadowColor = 'transparent';
-  x.fillStyle = 'rgba(255,255,255,.85)';
-  x.fillRect(-W * .62, -bh / 2, W * 1.24, 4); x.fillRect(-W * .62, bh / 2 - 4, W * 1.24, 4);
+  x.rotate(-.05);
   if (logo) {
-    const s = Math.min(W * .86 / logo.width, bh * .92 / logo.height);
+    const s = Math.min(W * .9 / logo.width, H * .2 / logo.height);
     const w = logo.width * s, h = logo.height * s;
-    x.shadowColor = 'rgba(0,0,0,.55)'; x.shadowBlur = 8; x.shadowOffsetY = 3;
+    x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 18; x.shadowOffsetY = 6;
     x.drawImage(logo, -w / 2, -h / 2, w, h);
   } else {
-    const lines = nameLines(def.name);
     x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
-    let size = 110;
-    const font = () => `${size}px PackFont, Lato, sans-serif`;
+    let size = 96;
+    const font = () => `900 ${size}px "Hiragino Sans", "Yu Gothic", Meiryo, "Noto Sans JP", sans-serif`;
     x.font = font();
-    while ((Math.max(...lines.map(l => x.measureText(l).width)) > W * .86 || size * 1.02 * lines.length > bh * .9) && size > 30) { size -= 2; x.font = font(); }
-    const lh = size * 1.02, y0 = -(lines.length - 1) * lh / 2;
-    // Gelb mit dickem blauem Rand und harter Kante darunter
-    lines.forEach((l, i) => {
-      const y = y0 + i * lh + size * .06;
-      x.lineWidth = size * .3; x.strokeStyle = '#142a5c'; x.strokeText(l, size * .03, y + size * .1);
-      x.strokeStyle = '#2a4f9e'; x.strokeText(l, 0, y);
-      x.fillStyle = '#ffcb05'; x.fillText(l, 0, y);
-    });
+    while (x.measureText(def.title).width > W * .88 && size > 30) { size -= 2; x.font = font(); }
+    x.shadowColor = 'rgba(0,0,0,.5)'; x.shadowBlur = 14; x.shadowOffsetY = 4;
+    x.lineWidth = size * .22; x.strokeStyle = '#10204f'; x.strokeText(def.title, 0, 0);
+    x.shadowColor = 'transparent';
+    x.fillStyle = '#fff'; x.fillText(def.title, 0, 0);
   }
   x.restore();
   return c;
@@ -573,7 +558,6 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
   // Bilder laden, bevor irgendetwas erscheint.
   const [logo, art, ...images] = await Promise.all([loadImage(def.logo), loadImage(def.art && `${def.art}/high.webp`), ...cards.map(c => loadImage(c.image))]);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-  await document.fonts.load('80px PackFont').catch(() => {});
   const texFront = texture(drawFront(def, logo, art));
   const texBack = texture(drawBack(def));
   const texCardBack = texture(drawCardBack());

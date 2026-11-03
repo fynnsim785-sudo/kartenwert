@@ -655,7 +655,7 @@ function renderProfile() {
       <p>All cards are digital only. You get them from packs, by buying or in auctions. You cannot add your own real cards. Cards from packs can be auctioned at any time.</p>
       <p>Auctions only use app balance.</p>
       <p>Your collection, themes and name are stored only on this device.</p>
-      <p>Version 1.9.3</p>
+      <p>Version 1.9.4</p>
     </details>`;
 }
 

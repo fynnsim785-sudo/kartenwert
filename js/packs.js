@@ -62,7 +62,21 @@ const ART = {
   ecard1: 'en/ecard/ecard1/6', base4: 'en/base/base4/4', gym1: 'en/gym/gym1/1', base2: 'en/base/base2/11', base3: 'en/base/base3/4',
   gym2: 'en/gym/gym2/2', neo2: 'en/neo/neo2/1', base5: 'en/base/base5/4', neo3: 'en/neo/neo3/20', neo1: 'en/neo/neo1/9', base1: 'en/base/base1/4',
 };
-for (const p of PACKS) p.art = `https://assets.tcgdex.net/${ART[p.id]}`;
+const LOGO = {
+  sv05: 'https://images.pokemontcg.io/sv5/logo.png',
+  sv01: 'https://assets.tcgdex.net/en/sv/sv01/logo.webp',
+  ecard1: 'https://assets.tcgdex.net/en/ecard/ecard1/logo.webp',
+};
+// Für japanische Sets gibt es keine freien Logos, dort steht der Originalname wie auf dem echten Pack.
+const JP = {
+  SV7a: '楽園ドラゴーナ', SV6a: 'ナイトワンダラー', SV5a: 'クリムゾンヘイズ', SV9: 'バトルパートナーズ',
+  SV4a: 'レイジングサーフ', SV10: 'ロケット団の栄光', SV2a: 'ポケモンカード151', SV8a: 'テラスタルフェスex',
+};
+for (const p of PACKS) {
+  p.art = `https://assets.tcgdex.net/${ART[p.id]}`;
+  if (LOGO[p.id]) p.logo = LOGO[p.id];
+  p.title = JP[p.id] || p.name;
+}
 export const packById = id => PACKS.find(p => p.id === id);
 
 const shuffle = list => {
@@ -125,21 +139,8 @@ export async function rollPack(def, isOwned) {
 }
 
 // Wie ein echter Booster: Motiv über die ganze Folie, unten nur der Name des Packs.
-// Lange Namen kommen auf zwei Zeilen, damit die Schrift groß bleibt.
-export function nameLines(name) {
-  const words = name.split(' ');
-  if (name.length <= 9 || words.length < 2) return [name];
-  let best = [name], worst = Infinity;
-  for (let i = 1; i < words.length; i++) {
-    const w = Math.max(words.slice(0, i).join(' ').length, words.slice(i).join(' ').length);
-    if (w < worst) { worst = w; best = [words.slice(0, i).join(' '), words.slice(i).join(' ')]; }
-  }
-  return best;
-}
-
 export function packFace(def) {
-  const lines = nameLines(def.name);
-  const size = Math.min(17, 128 / Math.max(...lines.map(l => l.length), 5)); // in Prozent der Packbreite
+  const size = Math.min(14, 84 / Math.max(def.title.length, 5)); // in Prozent der Packbreite
   return `<div class="pk-face" style="--p1:${def.colors[0]};--p2:${def.colors[1]}">
     <i class="pk-blur" style="background-image:url('${esc(def.art)}/low.webp')"></i>
     <i class="pk-stripe a"></i><i class="pk-stripe b"></i>
@@ -147,8 +148,7 @@ export function packFace(def) {
     <i class="pk-veil"></i>
     <i class="pk-crimp top"></i><i class="pk-crimp bot"></i><i class="pk-fold"></i>
     <div class="pk-art">
-      <i class="pk-band"></i>
-      ${def.logo ? `<img src="${esc(def.logo)}" alt="${esc(def.name)}">` : `<b class="pk-jp" style="font-size:${size.toFixed(1)}cqw">${lines.map(esc).join('<br>')}</b>`}
+      ${def.logo ? `<img src="${esc(def.logo)}" crossorigin="anonymous" alt="${esc(def.name)}">` : `<b class="pk-jp" style="font-size:${size.toFixed(1)}cqw">${esc(def.title)}</b>`}
     </div>
     <i class="pk-sheen"></i>
   </div>`;
