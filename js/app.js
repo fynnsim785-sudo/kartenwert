@@ -4,6 +4,7 @@ import { countTo, flyToCollection, attachTilt, drawChart, enterPage, observeReve
 import { ICON } from './icons.js';
 import * as market from './market.js';
 import { PACKS, PACK_CLIP, packById, packFace, rollPack, playPack } from './packs.js';
+import { openBattle, ENERGY_CARDS, energyType } from './battle.js';
 
 const CENTS = 100;
 // Rabatt: Etwa jede vierte Karte kostet diese Woche 5 bis 10 % weniger. Jede Karte nur einmal, damit kein Geld-Glitch entsteht.
@@ -27,6 +28,11 @@ const toastEl = document.getElementById('toast');
 const nf = new Intl.NumberFormat('en-GB');
 const money = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' });
 
+// Jede Karte höchstens 5-mal, Energie-Karten bis 15-mal. Sprachversionen derselben Karte zählen zusammen.
+const MAX_COPIES = 5, MAX_ENERGY = 15;
+const isEnergy = c => /energ/i.test(c.name || '');
+const copyLimit = c => (isEnergy(c) ? MAX_ENERGY : MAX_COPIES);
+
 const state = load();
 const ui = {
   tab: 'home', overview: 'overview', range: '1M', cardRange: 'MAX', filter: 'all', game: 'pokemon', allValuable: false,
@@ -42,18 +48,20 @@ function cardIdent(c) {
   return c.game + ':' + (c.game === 'pokemon' ? id.slice(id.indexOf(':') + 1) : id);
 }
 
-// Räumt alte Doppelte auf. Gekaufte Doppelte bekommst du zum Kaufpreis zurück.
+// Räumt zu viele Kopien auf. Gekaufte Kopien über der Grenze bekommst du zum Kaufpreis zurück.
 function removeDuplicates(s) {
-  const keep = new Map();
-  for (const c of s.cards) {
-    const k = cardIdent(c), prev = keep.get(k);
-    if (!prev) { keep.set(k, c); continue; }
-    const drop = c.verified && !prev.verified ? prev : c;
-    if (drop === prev) keep.set(k, c);
-    if (drop.buyPrice != null) s.ledger += Math.round(drop.buyPrice * 100);
-  }
-  const left = new Set(keep.values());
-  s.cards = s.cards.filter(c => left.has(c));
+  const count = new Map(), marked = new Set();
+  const keep = s.cards.filter(c => {
+    const k = cardIdent(c);
+    if (!c.verified) { if (marked.has(k)) return false; marked.add(k); return true; }
+    const n = (count.get(k) || 0) + 1;
+    count.set(k, n);
+    if (n <= copyLimit(c)) return true;
+    if (c.buyPrice != null) s.ledger += Math.round(c.buyPrice * 100);
+    return false;
+  });
+  // Gemerkt und schon gesammelt: das Merken fällt weg
+  s.cards = keep.filter(c => c.verified || !count.has(cardIdent(c)));
 }
 
 function load() {
@@ -66,6 +74,7 @@ function load() {
   s.ledger = s.ledger || 0; // Käufe und Verkäufe mit dem App-Guthaben, in Cent
   s.events = s.events || [];
   s.discountUsed = s.discountUsed || [];
+  s.battleTeam = s.battleTeam || []; // Schlüssel der Karten im Kampf-Team
   s.themes = s.themes || []; // eigene Themen im Portfolio: { id, name, keys: [Karten-Schlüssel] }
   s.name = s.name && s.name !== 'Sammler' ? s.name : 'Collector';
   s.lastRefresh = s.lastRefresh || 0;
@@ -144,6 +153,16 @@ function rangeButtons(attr, current) {
 const cardImg = c => c.image ? `<img src="${esc(hq(c.image))}" alt="" loading="lazy" decoding="async">` : '<img alt="">';
 const owned = card => state.cards.find(c => cardIdent(c) === cardIdent(card));
 const hasCard = card => { const have = owned(card); return !!(have && have.verified); };
+const copies = card => state.cards.filter(c => c.verified && cardIdent(c) === cardIdent(card)).length;
+const atLimit = card => copies(card) >= copyLimit(card);
+// Gleiche Karten als ein Stapel: erste Kopie plus Anzahl.
+function stacks(list) {
+  const by = new Map();
+  for (const c of list) { const k = cardIdent(c) + (c.verified ? '' : ':m'); const e = by.get(k); if (e) e.n++; else by.set(k, { c, n: 1 }); }
+  return [...by.values()];
+}
+const copyTag = n => (n > 1 ? `<span class="copies">×${n}</span>` : '');
+const limitMsg = card => `You already have this card ${copyLimit(card)} times.`
 
 // Feld für ein Spiel: Farbe des Spiels, davor echte Kartenbilder aus dem Katalog.
 function gameTile(key, name, target, on) {
@@ -294,12 +313,13 @@ function openCard(key) {
     ${chartSvg(points)}
     <div class="axis"><span>${dateDe(points[0].d)}</span><span>Low ${eur(Math.min(...vals))} · High ${eur(Math.max(...vals))}</span><span>${dateDe(points[points.length - 1].d)}</span></div>
     ${rangeButtons('card-range', ui.cardRange)}
-    <div class="head" style="margin-top:0"><h2>Your copy</h2></div>
+    <div class="head" style="margin-top:0"><h2>${copies(c) > 1 ? `Your copies <span class="count">${copies(c)} / ${copyLimit(c)}</span>` : 'Your copy'}</h2></div>
     ${c.buyPrice != null ? `<div class="profit ${profitOf(c) < 0 ? 'loss' : ''}">
         <div><span>Bought for</span><b>${money.format(c.buyPrice)}</b></div>
         <div><span>${profitOf(c) < 0 ? 'Loss' : 'Profit'}</span><b>${profitOf(c) < 0 ? '-' : '+'}${eur(Math.abs(profitOf(c)))}</b></div>
       </div>
-      <div class="btns"><button class="btn" data-sell-back="${esc(c.key)}"><span>Sell · ${money.format(c.price || 0)}</span></button></div>
+      <div class="btns"><button class="btn" data-sell-back="${esc(c.key)}"><span>Sell · ${money.format(c.price || 0)}</span></button>
+        ${c.verified && !atLimit(c) && c.price ? `<button class="btn sec" data-buy-more="${esc(c.key)}">Buy another</button>` : ''}</div>
       ${c.fromPack && ui.marketReady ? `<div class="btns"><button class="btn sec" data-auction-form="${esc(c.key)}">Auction</button></div>` : ''}`
       : `<p class="note ${c.verified ? 'ok' : 'warn'}" style="margin:0">${c.verified ? 'In your collection' : 'Does not count. Buy the card or pull it from a pack.'}</p>`}
     ${c.verified ? `<div class="head"><h2>Themes</h2></div>
@@ -489,10 +509,9 @@ async function manualSearch() {
 
 function addToCollection(card, verified, photoHash) {
   const have = owned(card);
-  if (have) {
-    if (have.verified || !verified) return false;
-    state.cards = state.cards.filter(c => c !== have); // aus gemerkt wird gezählt
-  }
+  if (have && !verified) return false;
+  if (verified && atLimit(card)) return false;
+  if (have && !have.verified) state.cards = state.cards.filter(c => c !== have); // aus gemerkt wird gezählt
   const hist = { ...(card.hist || {}) };
   hist[today()] = card.price;
   state.cards.unshift({ ...card, hist, verified, photoHash: photoHash || null, key: crypto.randomUUID(), addedAt: Date.now() });
@@ -598,8 +617,8 @@ function renderPortfolio() {
       <button class="btn sec" data-theme-delete="${esc(theme.id)}">Delete theme</button></div>` : ''}
     ${theme && !shown.length ? '<p class="note">This theme is empty. Tap "Add cards" to fill it.</p>' : ''}
     ${shown.length ? `<div class="head"><h2>${shown.length} ${shown.length === 1 ? 'card' : 'cards'}</h2></div>
-    <div class="grid big stag">${shown.map(c => `
-      <button class="tile" data-open="${esc(c.key)}">${cardImg(c)}
+    <div class="grid big stag">${stacks(shown).map(({ c, n }) => `
+      <button class="tile" data-open="${esc(c.key)}">${cardImg(c)}${copyTag(n)}
         <span class="name">${esc(c.name)}</span>
         <span class="sub">${esc(GAMES[c.game])} · ${esc(c.set)}</span>
         ${c.rarity ? `<span class="sub">${esc(c.rarity)}</span>` : ''}
@@ -635,8 +654,9 @@ function renderProfile() {
       <div><span>${profit < 0 ? 'Loss' : 'Profit'}</span><b class="${profit < 0 ? 'down' : profit > 0 ? 'up' : ''}">${profit < 0 ? '-' : profit > 0 ? '+' : ''}${eur(Math.abs(profit))}</b></div>
       <div><span>Cards</span><b>${nf.format(cards.length)}</b></div>
     </div>
+    <button class="battlecta" data-battle><span class="ic">${ICON.battle}</span><span class="txt"><b>Battle</b><span>Fight other players with your Pokémon</span></span>${ICON.chevron}</button>
     <div class="head"><h2>Showcase</h2>${top.length ? '<button class="link" data-go="portfolio">All</button>' : ''}</div>
-    ${top.length ? `<div class="grid">${top.slice(0, 3).map(c => `<button class="tile" data-open="${esc(c.key)}">${cardImg(c)}<span class="name">${esc(c.name)}</span><span class="val">${money.format(c.price || 0)}</span></button>`).join('')}</div>`
+    ${top.length ? `<div class="grid">${stacks(top).slice(0, 3).map(({ c, n }) => `<button class="tile" data-open="${esc(c.key)}">${cardImg(c)}${copyTag(n)}<span class="name">${esc(c.name)}</span><span class="val">${money.format(c.price || 0)}</span></button>`).join('')}</div>`
       : packCta('Open a pack')}
     <div class="head"><h2>Progress</h2></div>
     <div class="rows">
@@ -655,7 +675,7 @@ function renderProfile() {
       <p>All cards are digital only. You get them from packs, by buying or in auctions. You cannot add your own real cards. Cards from packs can be auctioned at any time.</p>
       <p>Auctions only use app balance.</p>
       <p>Your collection, themes and name are stored only on this device.</p>
-      <p>Version 1.9.8</p>
+      <p>Version 1.10.0</p>
     </details>`;
 }
 
@@ -747,7 +767,7 @@ function auctionTile(a) {
 function openAuction(id) {
   const a = ui.auctions.find(x => x.id === id);
   if (!a) { closeModal(); return; }
-  const has = hasCard({ game: a.game, id: a.card_id });
+  const has = atLimit({ game: a.game, id: a.card_id, name: a.name });
   const least = minBid(a);
   modal.innerHTML = `<div class="sheet">
     <button class="back" data-close aria-label="Back">${ICON.back}</button>
@@ -764,7 +784,7 @@ function openAuction(id) {
     ${a.market_eur ? `<div class="aucline"><span>Market price</span><b>${money.format(a.market_eur)}</b></div>` : ''}
     <div class="aucline"><span>Your balance</span><b>${eur(freeBalance())}</b></div>
     ${a.mine ? `<div class="btns">${a.bid_count ? '<p class="note" style="margin:0">Your card. It goes to the highest bid.</p>' : `<button class="btn sec" data-auction-cancel="${esc(a.id)}">Withdraw auction</button>`}</div>`
-      : has ? '<p class="note" style="margin:12px 0 0">You already have this card.</p>'
+      : has ? `<p class="note" style="margin:12px 0 0">${limitMsg(a)}</p>`
       : `${a.leading ? '<p class="note ok" style="margin:12px 0 0">You are in the lead.</p>' : ''}
         <div class="fieldwrap" style="margin-top:12px"><input class="field" id="bidValue" type="number" min="${(least / CENTS).toFixed(2)}" max="100000" step="0.01" value="${(least / CENTS).toFixed(2)}" aria-label="Your bid in euros"><span>€</span></div>
         <div class="btns"><button class="btn" data-bid="${esc(a.id)}">Bid</button></div>`}
@@ -851,7 +871,7 @@ const profitOf = c => (c.buyPrice != null ? cents(c.price) - cents(c.buyPrice) :
 async function buyCard(from) {
   const seen = ui.preview;
   if (!seen) return;
-  if (hasCard(seen)) { toast('You already have this card.'); return; }
+  if (atLimit(seen)) { toast(limitMsg(seen)); return; }
   const fresh = await getCard(seen.game, seen.id).catch(() => null) || seen;
   if (!cents(fresh.price)) { toast('There is no price for this card.'); return; }
   const cut = discountCut(fresh), price = cents(fresh.price) - cut;
@@ -885,6 +905,28 @@ async function sellBack(key) {
   renderTab();
 }
 
+// Energie-Karten für Kämpfe, jede Sorte bis zu 15-mal.
+function energyShelf() {
+  return `<div class="head" id="energy"><h2>Energy</h2><span class="muted small">For battles · up to 15 each</span></div>
+    <div class="shelf stag">${ENERGY_CARDS.map(e => {
+      const n = state.cards.filter(c => c.verified && energyType(c) === e.type).length;
+      return `<button class="prod energy" data-energy="${esc(e.id)}"><img src="${esc(small(e.image))}" alt="" loading="lazy">
+        <span class="name">${esc(e.type)} Energy</span><span class="sub">${n} / ${MAX_ENERGY}</span></button>`;
+    }).join('')}</div>`;
+}
+async function openEnergy(id) {
+  const card = await getCard('pokemon', id).catch(() => null);
+  if (!card) { toast('This card cannot be loaded right now.'); return; }
+  openPreview(card, '');
+}
+function startBattle() {
+  if (!ui.marketReady) { toast('Battles need a connection to the server. Please try again in a moment.'); return; }
+  openBattle({
+    state, save, toast, isEnergy, onClose: () => renderTab(),
+    goEnergy: () => { switchTab('market'); setTimeout(() => { const el = document.getElementById('energy'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 400); },
+  });
+}
+
 // Die Pack-Regale im Markt.
 function packShelves() {
   const shelf = (title, tier) => `<div class="head"><h2>${title}</h2></div><div class="shelf stag">${PACKS.filter(p => p.tier === tier).map(p => `
@@ -903,7 +945,7 @@ function openPack(id) {
     <div class="detail"><div><h3>${esc(def.name)}</h3><div class="muted small">${def.count} cards · Pokémon</div></div>
       <div class="pricebox"><div class="big">${eur(price)}</div></div></div>
     <div class="walletline"><span>Balance</span><b>${eur(freeBalance())}</b></div>
-    <p class="packnote">Paid with app balance. Contents are random; cards you already own will not appear.</p>
+    <p class="packnote">Paid with app balance. Contents are random; you can own up to 5 copies of a card.</p>
     <div class="btns"><button class="btn buy" data-pack-buy="${esc(def.id)}" ${enough ? '' : 'disabled'}>${enough ? 'Buy and open' : 'Not enough balance'}</button></div></div>`;
   modal.hidden = false;
 }
@@ -916,7 +958,7 @@ async function buyPack(id, button) {
   ui.packBusy = true;
   if (button) { button.disabled = true; button.textContent = 'Preparing pack …'; }
   try {
-    const cards = await rollPack(def, hasCard);
+    const cards = await rollPack(def, atLimit);
     if (price > freeBalance()) { toast('Not enough balance.'); return; }
     const worth = cards.reduce((s, c) => s + (c.price || 0), 0);
     state.ledger -= price;
@@ -977,7 +1019,7 @@ function renderMarket() {
     <div class="points"><span>Free balance <b>${eur(freeBalance())}</b></span><span>${ui.marketGame === 'all' ? '' : esc(GAMES[ui.marketGame])}</span></div>
     ${ui.auctions.length ? `<div class="head"><h2>Auctions</h2></div>
       <div class="shelf stag">${ui.auctions.filter(a => (ui.marketGame === 'all' || a.game === ui.marketGame) && (!q || a.name.toLowerCase().includes(q))).map(auctionTile).join('')}</div>` : ''}
-    ${q || !['all', 'pokemon'].includes(ui.marketGame) ? '' : packShelves()}
+    ${q || !['all', 'pokemon'].includes(ui.marketGame) ? '' : packShelves() + energyShelf()}
     <div class="head"><h2>Featured</h2></div>
     ${featured.length ? `<div class="shelf stag">${featured.join('')}</div>` : SKELETON_SHELF}
     ${watched.length ? section('Watchlist', 'watch', watched, '') : ''}
@@ -990,7 +1032,7 @@ function openListing(id) {
   const l = ui.listings.find(x => x.id === id);
   if (!l) return;
   const watching = state.watch.includes(id);
-  const already = hasCard({ game: l.game, id: l.card_id });
+  const already = atLimit({ game: l.game, id: l.card_id, name: l.name });
   modal.innerHTML = `<div class="sheet">
     <button class="back" data-close aria-label="Back">${ICON.back}</button>
     ${l.image ? `<div class="holo"><img class="cardimg" src="${esc(hq(l.image))}" alt=""><span class="gloss"></span></div>` : ''}
@@ -1003,7 +1045,7 @@ function openListing(id) {
     </div>
     <p class="note">Digital card only. Paid with your app balance (${eur(freeBalance())}).</p>
     <div class="btns">
-      ${l.mine ? `<button class="btn sec" data-cancel="${esc(l.id)}">Withdraw offer</button>` : `<button class="btn" data-buy="${esc(l.id)}" ${already || l.price > freeBalance() ? 'disabled' : ''}>${already ? 'In your collection' : l.price > freeBalance() ? 'Not enough balance' : 'Buy'}</button>`}
+      ${l.mine ? `<button class="btn sec" data-cancel="${esc(l.id)}">Withdraw offer</button>` : `<button class="btn" data-buy="${esc(l.id)}" ${already || l.price > freeBalance() ? 'disabled' : ''}>${already ? 'Limit reached' : l.price > freeBalance() ? 'Not enough balance' : 'Buy'}</button>`}
       ${l.mine ? '' : `<button class="btn sec" data-watch="${esc(l.id)}">${watching ? 'Remove from watchlist' : 'Watch'}</button>`}
     </div></div>`;
   modal.hidden = false;
@@ -1045,7 +1087,7 @@ function fromListing(l) {
 
 async function doBuy(id) {
   const wanted = ui.listings.find(x => x.id === id);
-  if (wanted && hasCard({ game: wanted.game, id: wanted.card_id })) { toast('You already have this card.'); return; }
+  if (wanted && atLimit({ game: wanted.game, id: wanted.card_id, name: wanted.name })) { toast(limitMsg(wanted)); return; }
   try {
     const l = await market.buy(state.secret, id);
     const fresh = await getCard(l.game, l.card_id).catch(() => null);
@@ -1150,7 +1192,7 @@ document.addEventListener('click', e => {
   if (e.target.classList && e.target.classList.contains('cardimg')) { openZoom(e.target.src); return; }
   const b = e.target.closest('button');
   if (!b) { if (e.target === modal) closeModal(); return; }
-  if (b.closest('#live')) return;
+  if (b.closest('#live') || b.closest('#battle')) return;
   const d = b.dataset;
   if (d.range) { ui.range = d.range; renderHome(); }
   else if (d.overview) { ui.overview = d.overview; renderHome(); }
@@ -1160,6 +1202,8 @@ document.addEventListener('click', e => {
   else if (d.go) switchTab(d.go);
   else if ('allValuable' in d) { ui.allValuable = !ui.allValuable; renderHome(false); }
   else if (d.open) openCard(d.open);
+  else if ('battle' in d) startBattle();
+  else if (d.energy) openEnergy(d.energy);
   else if ('close' in d) closeModal();
   else if (d.remove) {
     state.cards = state.cards.filter(c => c.key !== d.remove);
@@ -1198,6 +1242,7 @@ document.addEventListener('click', e => {
   else if (d.packBuy) buyPack(d.packBuy, modal.querySelector('[data-pack-buy]'));
   else if (d.pack) openPack(d.pack);
   else if ('buyCard' in d) buyCard(modal.querySelector('.cardimg'));
+  else if (d.buyMore) { const c = state.cards.find(x => x.key === d.buyMore); if (c) { ui.preview = c; buyCard(modal.querySelector('.cardimg')); } }
   else if (d.sellBack) sellBack(d.sellBack);
   else if ('editName' in d) { ui.editName = true; renderProfile(); document.getElementById('nameInput')?.select(); }
   else if ('saveName' in d) saveName();

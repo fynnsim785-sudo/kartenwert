@@ -2,6 +2,7 @@
 const line = (d, w = 2.2) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 
 export const ICON = {
+  battle: line('<path d="M4 4l9 9M4 4h4M4 4v4M20 4l-9 9M20 4h-4M20 4v4M7 17l-3 3M17 17l3 3M9.5 14.5l-3 3M14.5 14.5l3 3"/>', 2.2),
   search: line('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>'),
   camera: line('<path d="M4 8h3.500L9 5.500h6L16.500 8H20a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.500"/>', 2),
   close: line('<path d="M6 6l12 12M18 6L6 18"/>'),

@@ -31,6 +31,18 @@ const MESSAGES = {
   'Dein Gebot ist zu niedrig.': 'Your bid is too low.',
   'Du kannst höchstens 3 Auktionen am Tag zurückziehen.': 'You can withdraw at most 3 auctions per day.',
   'Mit Geboten lässt sich die Auktion nicht mehr zurückziehen.': 'An auction with bids cannot be withdrawn.',
+  'Du hast diese Karte schon so oft, wie erlaubt.': 'You already own the maximum number of copies of this card.',
+  'Wähle 1 bis 3 Pokémon.': 'Choose 1 to 3 Pokémon.',
+  'Jedes Pokémon braucht eine Attacke.': 'Every Pokémon needs an attack.',
+  'Du bist schon in einem Kampf.': 'You are already in a battle.',
+  'Dieser Spieler wartet nicht mehr.': 'This player is no longer waiting.',
+  'Diesen Kampf gibt es nicht.': 'This battle does not exist.',
+  'Der Kampf ist vorbei.': 'The battle is over.',
+  'Du bist nicht am Zug.': 'It is not your turn.',
+  'Der Kampf hat sich geändert. Versuche es noch einmal.': 'The battle changed. Please try again.',
+  'Dieses Pokémon kann nicht kämpfen.': 'This Pokémon cannot battle.',
+  'Diese Attacke gibt es nicht.': 'This attack does not exist.',
+  'Diesen Zug gibt es nicht.': 'This move does not exist.',
 };
 const english = msg => MESSAGES[msg] || (msg && !/[äöüß]|\b(der|die|das|ist|nicht)\b/i.test(msg) ? msg : 'Something went wrong. Please try again.');
 
@@ -84,3 +96,11 @@ export const bid = (secret, id, amount, ledger) => rpc('kw_bid', { p_secret: sec
 export const auctionCancel = (secret, id) => rpc('kw_auction_cancel', { p_secret: secret, p_auction: id });
 export const results = secret => rpc('kw_results_open', { p_secret: secret });
 export const resultsDone = (secret, ids) => rpc('kw_results_done', { p_secret: secret, p_ids: ids });
+
+// Kämpfe
+export const queueJoin = (secret, team) => rpc('kw_queue_join', { p_secret: secret, p_team: team });
+export const queueLeave = secret => rpc('kw_queue_leave', { p_secret: secret });
+export const lobby = secret => rpc('kw_lobby', { p_secret: secret });
+export const connect = (secret, id, team) => rpc('kw_connect', { p_secret: secret, p_queue: id, p_team: team });
+export const battle = (secret, id) => rpc('kw_battle', { p_secret: secret, p_id: id });
+export const move = (secret, id, version, kind, index) => rpc('kw_battle_move', { p_secret: secret, p_id: id, p_version: version, p_kind: kind, p_index: index });
