@@ -1,16 +1,16 @@
 // Echte Karten mit echten Preisen für die Entdecken-Bereiche. Wird einen Tag lang gespeichert.
 import { searchCards, getSets } from './cards.js';
 
-const STORE = 'kartenwert.feed.v1';
+const STORE = 'kartenwert.feed.v2';
 const DAY = 24 * 3600 * 1000;
 export const TOPICS = [
-  { game: 'pokemon', q: 'Glurak', title: 'Glurak' },
+  { game: 'pokemon', q: 'Charizard', title: 'Charizard' },
   { game: 'pokemon', q: 'Pikachu', title: 'Pikachu' },
-  { game: 'pokemon', q: 'Mewtu', title: 'Mewtu' },
-  { game: 'pokemon', q: 'Evoli', title: 'Evoli' },
+  { game: 'pokemon', q: 'Mewtwo', title: 'Mewtwo' },
+  { game: 'pokemon', q: 'Eevee', title: 'Eevee' },
   { game: 'pokemon', q: 'Gengar', title: 'Gengar' },
   { game: 'magic', q: 'Sol Ring', title: 'Magic: Sol Ring' },
-  { game: 'yugioh', q: 'Blue-Eyes White Dragon', title: 'Yu-Gi-Oh!: Weißer Drache' },
+  { game: 'yugioh', q: 'Blue-Eyes White Dragon', title: 'Yu-Gi-Oh!: Blue-Eyes' },
 ];
 
 let memory = null;
@@ -33,7 +33,7 @@ export function loadFeed(onUpdate) {
   const feed = { at: Date.now(), topics: [], sets: (cached && cached.sets) || [] };
   memory = feed;
   (async () => {
-    getSets('de').then(sets => {
+    getSets('en').then(sets => {
       feed.sets = sets.filter(s => s.logo).slice(0, 10);
       write(feed);
       onUpdate();

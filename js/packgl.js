@@ -2,7 +2,7 @@
 // Ohne WebGL2 oder bei "weniger Bewegung" bleibt es bei der einfachen Fassung in packs.js.
 import { makeSound } from './packsound.js';
 
-const money = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+const money = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const PW = 1, PH = 1.62, CW = .86, CH = 1.204, TEAR = .1;
@@ -346,7 +346,7 @@ function drawBack(def) {
   x.font = '700 26px Lato, system-ui, sans-serif';
   x.fillText(def.name, W * .25, H * .46);
   x.font = '500 20px Lato, system-ui, sans-serif';
-  x.fillText(`${def.count} Karten`, W * .25, H * .5);
+  x.fillText(`${def.count} cards`, W * .25, H * .5);
   x.fillText('KartenWert', W * .75, H * .48);
   return c;
 }
@@ -465,9 +465,9 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
   box.className = 'gl';
   box.innerHTML = `
     <canvas class="pk-gl"></canvas>
-    <button class="pk-sound" aria-label="Ton an oder aus"></button>
-    <button class="pk-skip" hidden>Überspringen</button>
-    <p class="pk-hint" hidden>Wische oben über das Pack, um es aufzureißen</p>
+    <button class="pk-sound" aria-label="Sound on or off"></button>
+    <button class="pk-skip" hidden>Skip</button>
+    <p class="pk-hint" hidden>Swipe across the top of the pack to tear it open</p>
     <div class="pk-info" hidden></div>`;
   const canvas = box.querySelector('canvas');
   const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -1089,15 +1089,15 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
     info.hidden = false;
     info.classList.remove('in'); void info.offsetWidth; info.classList.add('in');
     if (covered) {
-      const label = c.hit ? 'Etwas Besonderes …' : c.i === cards.length - 1 ? 'Die letzte Karte' : `Karte ${c.i + 1} von ${cards.length}`;
-      info.innerHTML = `<b class="pk-name">${label}</b><span class="pk-sub">Tippe zum Aufdecken</span>`;
+      const label = c.hit ? 'Something special …' : c.i === cards.length - 1 ? 'The last card' : `Card ${c.i + 1} of ${cards.length}`;
+      info.innerHTML = `<b class="pk-name">${label}</b><span class="pk-sub">Tap to reveal</span>`;
       return;
     }
     const i = c.i;
     info.innerHTML = `<b class="pk-name">${esc(c.data.name)}</b>
       <span class="pk-sub">${[c.data.rarity, c.data.set].filter(Boolean).map(esc).join(' · ')}</span>
-      <b class="pk-price ${c.hit ? 'hit' : ''}">${c.data.price ? money.format(c.data.price) : 'Kein Preis'}</b>
-      <span class="pk-sub">${i + 1} von ${cards.length} · Wische oder tippe</span>`;
+      <b class="pk-price ${c.hit ? 'hit' : ''}">${c.data.price ? money.format(c.data.price) : 'No price'}</b>
+      <span class="pk-sub">${i + 1} of ${cards.length} · Swipe or tap</span>`;
     if (c.hit && c.data.price) countUp(info.querySelector('.pk-price'), c.data.price, 900);
   }
 

@@ -4,7 +4,7 @@ import { burst } from './fx.js';
 import { playPackGL } from './packgl.js';
 
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-const money = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+const money = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const pack = (tier, lang, set, name, price, c1, c2, logo) => ({
@@ -12,31 +12,55 @@ const pack = (tier, lang, set, name, price, c1, c2, logo) => ({
   logo: logo ? `https://assets.tcgdex.net/${lang}/${logo}/${set}/logo.png` : '',
 });
 export const PACKS = [
-  pack('normal', 'de', 'sv08', 'Stürmische Funken', 5, '#f4b41a', '#b5341c', 'sv'),
-  pack('normal', 'de', 'sv07', 'Stellarkrone', 5, '#2b6fd6', '#17245f', 'sv'),
-  pack('normal', 'de', 'sv06', 'Maskerade im Zwielicht', 5, '#2e9e6b', '#123f4a', 'sv'),
-  pack('normal', 'de', 'sv04', 'Paradoxrift', 5, '#8a3fd1', '#2a1650', 'sv'),
-  pack('normal', 'de', 'sv03', 'Obsidian Flammen', 5, '#e2521d', '#2a1412', 'sv'),
-  pack('ja', 'ja', 'SV7a', '楽園ドラゴーナ', 5, '#19a7a0', '#0f3e5c'),
-  pack('ja', 'ja', 'SV5a', 'クリムゾンヘイズ', 6, '#d42b4a', '#3d0f2a'),
-  pack('ja', 'ja', 'SV4a', 'レイジングサーフ', 8, '#2f86d8', '#10305e'),
-  pack('ja', 'ja', 'SV2a', 'ポケモンカード151', 10, '#e8423a', '#1f4fa8'),
-  pack('ja', 'ja', 'SV8a', 'テラスタルフェス', 10, '#c04fd8', '#2d6fd0'),
+  pack('normal', 'en', 'sv08', 'Surging Sparks', 5, '#f4b41a', '#b5341c', 'sv'),
+  pack('normal', 'en', 'sv08.5', 'Prismatic Evolutions', 8, '#e05fd0', '#3a2a8a', 'sv'),
+  pack('normal', 'en', 'sv03.5', '151', 7, '#e8423a', '#1f4fa8', 'sv'),
+  pack('normal', 'en', 'me01', 'Mega Evolution', 5, '#3fa0d8', '#16305a', 'me'),
+  pack('normal', 'en', 'sv10', 'Destined Rivals', 5, '#d43a3a', '#2a1a40', 'sv'),
+  pack('normal', 'en', 'sv09', 'Journey Together', 5, '#3fbf8a', '#16405a', 'sv'),
+  pack('normal', 'en', 'sv07', 'Stellar Crown', 5, '#2b6fd6', '#17245f', 'sv'),
+  pack('normal', 'en', 'sv06.5', 'Shrouded Fable', 6, '#6a3fa8', '#1a1030', 'sv'),
+  pack('normal', 'en', 'sv06', 'Twilight Masquerade', 5, '#2e9e6b', '#123f4a', 'sv'),
+  pack('normal', 'en', 'sv05', 'Temporal Forces', 5, '#2fb8c8', '#3a1f5a'),
+  pack('normal', 'en', 'sv04.5', 'Paldean Fates', 7, '#e8b93a', '#2a1a4a', 'sv'),
+  pack('normal', 'en', 'sv04', 'Paradox Rift', 5, '#8a3fd1', '#2a1650', 'sv'),
+  pack('normal', 'en', 'sv03', 'Obsidian Flames', 5, '#e2521d', '#2a1412', 'sv'),
+  pack('normal', 'en', 'sv02', 'Paldea Evolved', 5, '#3a8ee8', '#173a2a', 'sv'),
+  pack('normal', 'en', 'sv01', 'Scarlet & Violet', 5, '#d43a2a', '#4a1a6a'),
+  pack('normal', 'en', 'swsh12.5', 'Crown Zenith', 7, '#e8c35a', '#1a2a5a', 'swsh'),
+  pack('normal', 'en', 'swsh11', 'Lost Origin', 5, '#5a3fa8', '#0f1a2a', 'swsh'),
+  pack('normal', 'en', 'swsh9', 'Brilliant Stars', 6, '#e8a53a', '#3a1a0a', 'swsh'),
+  pack('normal', 'en', 'swsh7', 'Evolving Skies', 8, '#3aa8e8', '#0f2a4a', 'swsh'),
+  pack('ja', 'ja', 'SV7a', 'Paradise Dragona', 5, '#19a7a0', '#0f3e5c'),
+  pack('ja', 'ja', 'SV6a', 'Night Wanderer', 6, '#3a3a6a', '#0f0f20'),
+  pack('ja', 'ja', 'SV5a', 'Crimson Haze', 6, '#d42b4a', '#3d0f2a'),
+  pack('ja', 'ja', 'SV9', 'Battle Partners', 6, '#e8723a', '#2a1a4a'),
+  pack('ja', 'ja', 'SV4a', 'Raging Surf', 8, '#2f86d8', '#10305e'),
+  pack('ja', 'ja', 'SV10', 'Glory of Team Rocket', 8, '#3a3a44', '#a3271e'),
+  pack('ja', 'ja', 'SV2a', 'Pokémon Card 151', 10, '#e8423a', '#1f4fa8'),
+  pack('ja', 'ja', 'SV8a', 'Terastal Festival', 10, '#c04fd8', '#2d6fd0'),
   pack('old', 'en', 'ecard1', 'Expedition', 50, '#c9772e', '#3f2413'),
   pack('old', 'en', 'base4', 'Base Set 2', 60, '#3f7fbf', '#1b2f52', 'base'),
   pack('old', 'en', 'gym1', 'Gym Heroes', 80, '#c8352e', '#3a1412', 'gym'),
   pack('old', 'en', 'base2', 'Jungle', 90, '#4f9a3a', '#16361a', 'base'),
   pack('old', 'en', 'base3', 'Fossil', 100, '#8d8778', '#2c2a25', 'base'),
+  pack('old', 'en', 'gym2', 'Gym Challenge', 110, '#d4452a', '#2a0f0a', 'gym'),
+  pack('old', 'en', 'neo2', 'Neo Discovery', 120, '#3a9ad8', '#0f2a40', 'neo'),
   pack('old', 'en', 'base5', 'Team Rocket', 130, '#3a3a44', '#0c0c10', 'base'),
+  pack('old', 'en', 'neo3', 'Neo Revelation', 140, '#d8b23a', '#3a2a0a', 'neo'),
   pack('old', 'en', 'neo1', 'Neo Genesis', 160, '#d9b23c', '#5a3f10', 'neo'),
   pack('old', 'en', 'base1', 'Base Set', 200, '#e3b93a', '#a3271e', 'base'),
 ];
 // Motiv jedes Packs: das Bild einer bekannten Karte aus genau diesem Set.
 const ART = {
-  sv08: 'de/sv/sv08/057', sv07: 'de/sv/sv07/128', sv06: 'de/sv/sv06/025', sv04: 'de/sv/sv04/038', sv03: 'de/sv/sv03/125',
-  SV7a: 'ja/SV/SV7a/011', SV5a: 'ja/SV/SV5a/052', SV4a: 'ja/SV/SV4a/115', SV2a: 'ja/SV/SV2a/006', SV8a: 'ja/SV/SV8a/093',
-  ecard1: 'en/ecard/ecard1/6', base4: 'en/base/base4/4', gym1: 'en/gym/gym1/1', base2: 'en/base/base2/11',
-  base3: 'en/base/base3/4', base5: 'en/base/base5/4', neo1: 'en/neo/neo1/9', base1: 'en/base/base1/4',
+  sv08: 'en/sv/sv08/057', 'sv08.5': 'en/sv/sv08.5/028', 'sv03.5': 'en/sv/sv03.5/006', me01: 'en/me/me01/003', sv10: 'en/sv/sv10/039',
+  sv09: 'en/sv/sv09/064', sv07: 'en/sv/sv07/128', 'sv06.5': 'en/sv/sv06.5/022', sv06: 'en/sv/sv06/025', sv05: 'en/sv/sv05/051',
+  'sv04.5': 'en/sv/sv04.5/018', sv04: 'en/sv/sv04/038', sv03: 'en/sv/sv03/125', sv02: 'en/sv/sv02/043', sv01: 'en/sv/sv01/045',
+  'swsh12.5': 'en/swsh/swsh12.5/018', swsh11: 'en/swsh/swsh11/052', swsh9: 'en/swsh/swsh9/017', swsh7: 'en/swsh/swsh7/28',
+  SV7a: 'ja/SV/SV7a/011', SV6a: 'ja/SV/SV6a/032', SV5a: 'ja/SV/SV5a/052', SV9: 'ja/SV/SV9/045', SV4a: 'ja/SV/SV4a/115',
+  SV10: 'ja/SV/SV10/039', SV2a: 'ja/SV/SV2a/006', SV8a: 'ja/SV/SV8a/093',
+  ecard1: 'en/ecard/ecard1/6', base4: 'en/base/base4/4', gym1: 'en/gym/gym1/1', base2: 'en/base/base2/11', base3: 'en/base/base3/4',
+  gym2: 'en/gym/gym2/2', neo2: 'en/neo/neo2/1', base5: 'en/base/base5/4', neo3: 'en/neo/neo3/20', neo1: 'en/neo/neo1/9', base1: 'en/base/base1/4',
 };
 for (const p of PACKS) p.art = `https://assets.tcgdex.net/${ART[p.id]}`;
 export const packById = id => PACKS.find(p => p.id === id);
@@ -83,12 +107,12 @@ async function inBatches(list, size, job) {
 // Stellt den Inhalt zusammen, bevor Geld abgebucht wird. Karten, die man schon hat, kommen nicht vor.
 export async function rollPack(def, isOwned) {
   const set = await getSet(def.lang, def.set).catch(() => null);
-  if (!set) throw new Error('Das Pack lässt sich gerade nicht laden.');
+  if (!set) throw new Error('The pack cannot be loaded right now.');
   const pool = shuffle(set.cards.filter(c => c.image && !isOwned({ game: 'pokemon', id: `${def.lang}:${c.id}` })));
-  if (pool.length < def.count) throw new Error('Du hast schon fast alle Karten aus diesem Pack.');
+  if (pool.length < def.count) throw new Error('You already own almost every card in this pack.');
   const details = await inBatches(pool.slice(0, def.count * 3 + 6), 8, c => getCard('pokemon', `${def.lang}:${c.id}`).catch(() => null));
   const cards = details.filter(c => c && c.image);
-  if (cards.length < def.count) throw new Error('Das Pack lässt sich gerade nicht laden.');
+  if (cards.length < def.count) throw new Error('The pack cannot be loaded right now.');
   const chosen = choose(cards, def.count, def.price * luck());
   await Promise.all(chosen.map(c => new Promise(done => {
     const img = new Image();
@@ -161,19 +185,19 @@ function showSummary(box, { def, cards, paid, canAgain, onAgain }, finish, tick)
   end.className = 'pk-sum';
   end.innerHTML = `<div class="pk-sumin">
     <p class="pk-sumtitle">${esc(def.name)}</p>
-    <button class="pk-hero ${isGood(best[0]) ? 'good' : ''}" data-pk="zoom" aria-label="Karte ansehen"><img src="${esc(best[0].image)}" alt=""></button>
-    <div class="pk-heroinfo"><b class="pk-name">${esc(best[0].name)}</b><span class="pk-sub">${esc(best[0].rarity || best[0].set || '')}</span><b class="pk-price ${isGood(best[0]) ? 'hit' : ''}">${best[0].price ? money.format(best[0].price) : 'Kein Preis'}</b></div>
+    <button class="pk-hero ${isGood(best[0]) ? 'good' : ''}" data-pk="zoom" aria-label="View card"><img src="${esc(best[0].image)}" alt=""></button>
+    <div class="pk-heroinfo"><b class="pk-name">${esc(best[0].name)}</b><span class="pk-sub">${esc(best[0].rarity || best[0].set || '')}</span><b class="pk-price ${isGood(best[0]) ? 'hit' : ''}">${best[0].price ? money.format(best[0].price) : 'No price'}</b></div>
     <div class="pk-totals">
-      <span>Wert<b data-count>${money.format(0)}</b></span>
-      <span>Bezahlt<b>${money.format(paid)}</b></span>
-      <span>Ergebnis<b class="${diff >= 0 ? 'up' : 'down'}">${diff >= 0 ? '+' : '−'}${money.format(Math.abs(diff))}</b></span>
+      <span>Value<b data-count>${money.format(0)}</b></span>
+      <span>Paid<b>${money.format(paid)}</b></span>
+      <span>Result<b class="${diff >= 0 ? 'up' : 'down'}">${diff >= 0 ? '+' : '−'}${money.format(Math.abs(diff))}</b></span>
     </div>
     <div class="pk-grid n${cards.length}">${best.map((c, i) => `<button class="pk-thumb ${isGood(c) ? 'good' : ''} ${i ? '' : 'on'}" data-pk-card="${i}"><img src="${esc(c.image)}" alt="${esc(c.name)}"><span>${c.price ? money.format(c.price) : '–'}</span></button>`).join('')}</div>
     <div class="pk-actions">
-      <button class="pk-again" data-pk="again" ${canAgain() ? '' : 'disabled'}>${canAgain() ? `Noch ein Pack · ${money.format(paid)}` : 'Nicht genug Guthaben'}</button>
-      <button class="pk-done" data-pk="close">Fertig</button>
+      <button class="pk-again" data-pk="again" ${canAgain() ? '' : 'disabled'}>${canAgain() ? `Another pack · ${money.format(paid)}` : 'Not enough balance'}</button>
+      <button class="pk-done" data-pk="close">Done</button>
     </div>
-    <p class="pk-sub pk-saved">Die Karten liegen jetzt in deiner Sammlung.</p>
+    <p class="pk-sub pk-saved">The cards are now in your collection.</p>
   </div>`;
   box.appendChild(end);
   const hero = end.querySelector('.pk-hero');
@@ -207,7 +231,7 @@ function showSummary(box, { def, cards, paid, canAgain, onAgain }, finish, tick)
       end.querySelectorAll('.pk-thumb').forEach(t => t.classList.toggle('on', t === pick));
       hero.classList.toggle('good', isGood(c));
       hero.querySelector('img').src = c.image;
-      heroInfo.innerHTML = `<b class="pk-name">${esc(c.name)}</b><span class="pk-sub">${esc(c.rarity || c.set || '')}</span><b class="pk-price ${isGood(c) ? 'hit' : ''}">${c.price ? money.format(c.price) : 'Kein Preis'}</b>`;
+      heroInfo.innerHTML = `<b class="pk-name">${esc(c.name)}</b><span class="pk-sub">${esc(c.rarity || c.set || '')}</span><b class="pk-price ${isGood(c) ? 'hit' : ''}">${c.price ? money.format(c.price) : 'No price'}</b>`;
       if (tick) tick();
       zoomed();
       return;
@@ -224,7 +248,7 @@ function playSimple({ def, cards, paid, canAgain, onAgain, onClose }) {
   box.id = 'packopen';
   box.innerHTML = `
     <div class="pk-rays" hidden></div>
-    <button class="pk-skip" hidden>Überspringen</button>
+    <button class="pk-skip" hidden>Skip</button>
     <div class="pk-center">
       <div class="pk-back" style="clip-path:${CLIP_BODY}"></div>
       <div class="pk-beam"></div>
@@ -233,7 +257,7 @@ function playSimple({ def, cards, paid, canAgain, onAgain, onClose }) {
       <div class="pk-top" style="clip-path:${CLIP_TOP}">${packFace(def)}</div>
       <i class="pk-tearhint"></i>
     </div>
-    <p class="pk-hint">Wische oben über das Pack, um es aufzureißen</p>
+    <p class="pk-hint">Swipe across the top of the pack to tear it open</p>
     <div class="pk-info" hidden></div>`;
   document.body.appendChild(box);
   document.body.classList.add('noscroll');
@@ -361,8 +385,8 @@ function playSimple({ def, cards, paid, canAgain, onAgain, onClose }) {
         info.hidden = false;
         info.innerHTML = `<b class="pk-name">${esc(c.name)}</b>
           <span class="pk-sub">${[c.rarity, c.set].filter(Boolean).map(esc).join(' · ')}</span>
-          <b class="pk-price ${hit ? 'hit' : ''}">${c.price ? money.format(c.price) : 'Kein Preis'}</b>
-          <span class="pk-sub">${i + 1} von ${cards.length} · Tippen für weiter</span>`;
+          <b class="pk-price ${hit ? 'hit' : ''}">${c.price ? money.format(c.price) : 'No price'}</b>
+          <span class="pk-sub">${i + 1} of ${cards.length} · Tap to continue</span>`;
         rays.hidden = !hit;
         if (hit) {
           const r = stack.getBoundingClientRect();

@@ -826,3 +826,24 @@ h2 { font-weight: 900; }
 .cardline.on { opacity: 1; }
 .cardline polygon { fill: rgba(0,214,143,.08); stroke: #00d68f; stroke-width: 3; stroke-linejoin: round; }
 .hitinfo .btn.sec { background: var(--soft); color: var(--text); }
+
+/* Themen im Portfolio */
+.themes { display: flex; gap: 8px; overflow-x: auto; margin: 4px -14px 10px; padding: 2px 14px; scrollbar-width: none; }
+.themes button { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 99px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 13.5px; font-weight: 700; cursor: pointer; }
+.themes button em { font-style: normal; font-weight: 600; color: var(--sub); }
+.themes button.on { background: var(--ink); border-color: var(--ink); color: var(--on-ink, #fff); }
+.themes button.on em { color: inherit; opacity: .7; }
+.themes button.add { border-style: dashed; color: var(--sub); }
+.themes button svg { width: 14px; height: 14px; }
+.themes.incard { margin-top: 0; }
+.themeactions { display: flex; gap: 8px; margin: 0 0 6px; }
+.themeactions .btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.themeactions .btn svg { width: 16px; height: 16px; }
+.themeideas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.themeideas button { padding: 6px 12px; border-radius: 99px; border: 0; background: var(--soft); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; }
+.themeauto { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 14px; }
+.grid.pick .tile { position: relative; }
+.grid.pick .pickmark { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: rgba(0,0,0,.35); color: #fff; opacity: .55; }
+.grid.pick .pickmark svg { width: 15px; height: 15px; }
+.grid.pick .tile.picked .pickmark { background: var(--green); opacity: 1; }
+.grid.pick .tile.picked img { outline: 3px solid var(--green); outline-offset: -3px; border-radius: 6px; }

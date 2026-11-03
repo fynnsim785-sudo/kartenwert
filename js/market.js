@@ -1,6 +1,39 @@
 // Marktplatz: Punkte und Angebote liegen geschützt auf dem Server.
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 
+// Der Server meldet Fehler auf Deutsch. Die App ist englisch, deshalb wird hier übersetzt.
+const MESSAGES = {
+  'Ungültiges Gerät': 'Invalid device.',
+  'Gerät unbekannt': 'Unknown device.',
+  'Diese Karte kann nicht eingetragen werden.': 'This card cannot be registered.',
+  'Für heute sind genug Pack-Karten eingetragen.': 'Enough pack cards registered for today.',
+  'Neue Geräte können erst nach einer Stunde anbieten.': 'New devices can only list cards after one hour.',
+  'Neue Geräte können erst nach einer Stunde bieten.': 'New devices can only bid after one hour.',
+  'Erworbene Karten kannst du erst nach 24 Stunden wieder anbieten.': 'Cards you acquired can be listed again after 24 hours.',
+  'Die Prüfung ist abgelaufen. Prüfe die Karte noch einmal.': 'The check has expired.',
+  'Diese Karte ist schon im Angebot.': 'This card is already listed.',
+  'Du kannst höchstens 20 Karten gleichzeitig anbieten.': 'You can list at most 20 cards at once.',
+  'Das Angebot enthält ungültige Angaben.': 'The offer contains invalid data.',
+  'Diese Karte ist nicht geprüft.': 'This card cannot be sold. Only cards from packs can be auctioned.',
+  'Diese Karte ist nicht mehr im Angebot.': 'This card is no longer listed.',
+  'Du kannst deine eigene Karte nicht kaufen.': 'You cannot buy your own card.',
+  'Du hast diese Karte schon.': 'You already have this card.',
+  'Du hast nicht genug Guthaben.': 'You do not have enough balance.',
+  'Dieses Angebot lässt sich nicht zurückziehen.': 'This offer cannot be withdrawn.',
+  'Diese Laufzeit gibt es nicht.': 'This duration does not exist.',
+  'Gib einen Startpreis von 0,01 € bis 100.000 € ein.': 'Enter a starting price from €0.01 to €100,000.',
+  'Du kannst höchstens 3 Auktionen gleichzeitig laufen lassen.': 'You can run at most 3 auctions at once.',
+  'Du kannst höchstens 5 Auktionen am Tag starten.': 'You can start at most 5 auctions per day.',
+  'Diese Auktion ist vorbei.': 'This auction has ended.',
+  'Du kannst nicht auf deine eigene Karte bieten.': 'You cannot bid on your own card.',
+  'Zu viele Gebote. Warte einen Moment.': 'Too many bids. Please wait a moment.',
+  'Du bietest schon auf diese Karte.': 'You are already bidding on this card.',
+  'Dein Gebot ist zu niedrig.': 'Your bid is too low.',
+  'Du kannst höchstens 3 Auktionen am Tag zurückziehen.': 'You can withdraw at most 3 auctions per day.',
+  'Mit Geboten lässt sich die Auktion nicht mehr zurückziehen.': 'An auction with bids cannot be withdrawn.',
+};
+const english = msg => MESSAGES[msg] || (msg && !/[äöüß]|\b(der|die|das|ist|nicht)\b/i.test(msg) ? msg : 'Something went wrong. Please try again.');
+
 async function rpc(fn, args = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
     method: 'POST',
@@ -10,7 +43,7 @@ async function rpc(fn, args = {}) {
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
-    const err = new Error((data && data.message) || 'Der Marktplatz antwortet nicht.');
+    const err = new Error(data && data.message ? english(data.message) : 'The marketplace is not responding.');
     err.status = res.status;
     err.code = data && data.code;
     throw err;

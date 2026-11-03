@@ -9,7 +9,7 @@ export function today(offset = 0) {
 async function getJson(url) {
   const res = await fetch(url);
   if (res.status === 404 || res.status === 400) return null;
-  if (!res.ok) throw new Error('Kartendienst antwortet nicht (' + res.status + ')');
+  if (!res.ok) throw new Error('Card service is not responding (' + res.status + ')');
   return res.json();
 }
 
@@ -104,7 +104,7 @@ const isJapanese = s => /[぀-ヿ一-鿿]/.test(s);
 
 async function pokemonSearch(q) {
   // Namen unterscheiden sich je Sprache, deshalb in allen passenden Sprachen suchen.
-  const langs = isJapanese(q) ? ['ja'] : ['de', 'en'];
+  const langs = isJapanese(q) ? ['ja'] : ['en', 'de'];
   const lists = await Promise.all(langs.map(lang =>
     getJson(`https://api.tcgdex.net/v2/${lang}/cards?name=like:${encodeURIComponent(q)}&pagination:itemsPerPage=80`)
       .then(list => (list || []).map(c => ({ lang, id: c.id, number: String(c.localId || ''), hasImage: !!c.image })))
