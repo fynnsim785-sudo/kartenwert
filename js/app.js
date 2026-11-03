@@ -678,7 +678,7 @@ function renderProfile() {
       <p>Gekaufte und ersteigerte Karten sind nur digital. Zur Sammlung zählen Kamera-Scans mit Echtheitsprobe und Käufe, Galerie-Bilder nicht.</p>
       <p>Auktionen laufen nur mit App-Guthaben. Geprüft wird auf dem Gerät, von den Fotos bleibt nur ein Fingerabdruck auf dem Server.</p>
       <p>Sammlung und Name liegen nur auf diesem Gerät. Fotos werden nie hochgeladen.</p>
-      <p>Version 1.7.2</p>
+      <p>Version 1.7.3</p>
     </details>`;
 }
 

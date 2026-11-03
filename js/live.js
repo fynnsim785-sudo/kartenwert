@@ -1,6 +1,6 @@
 // Live-Scanner: erkennt Karten direkt im Kamerabild und nimmt sie automatisch auf.
-import { VISUAL_SURE, visualSearch, cardFromKey, identify, checkPhoto, loadIndex, warmReaders, readNameNumber, nameFits, numberFits } from './scan.js';
-import { GAMES, getCard, findByNumber } from './cards.js';
+import { VISUAL_SURE, visualSearch, cardFromKey, identify, checkPhoto, loadIndex } from './scan.js';
+import { GAMES, getCard } from './cards.js';
 import { MATCH_SURE, COVER_HINT, readRegion, compareCard } from './match.js';
 import { createNight } from './night.js';
 import { findCard, straighten } from './detect.js';
@@ -11,7 +11,6 @@ import { runProof, quickSteps, cameraAllowed } from './proof.js';
 const money = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 const LANGS = { de: 'Deutsch', en: 'Englisch', ja: 'Japanisch' };
 const rawId = c => String(c.id).replace(/^[a-z]{2}:/, '');
-const wait = ms => new Promise(r => setTimeout(r, ms));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const thumb = c => c.image || '';
 
@@ -73,7 +72,7 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onAuction, onG
   const darkTag = el.querySelector('.livedark');
   let paused = false, closed = false, lastKey = '', misses = 0, session = 0, sessionValue = 0, prev = null;
   let busy = false;
-  if (game === 'pokemon') { loadIndex(); warmReaders(); }
+  if (game === 'pokemon') loadIndex();
 
   // Rechnet den Rahmen auf dem Bildschirm in Bildpunkte der Kamera um.
   function frameRect() {
@@ -238,50 +237,22 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onAuction, onG
     const pic = await freshPicture();
     if (closed) return;
     const regions = views(pic).map(v => readRegion(v.src, v.r));
-    // Name und Nummer werden nebenher gelesen, scharf und gerade gezogen. Länger als ein paar Sekunden wird nicht gewartet,
-    // nur beim ersten Mal etwas länger, solange die Texterkennung noch lädt.
-    const corners = findCard(pic.src, pic.r);
-    const sharp = corners && straighten(pic.src, corners, 600, 840, 0);
-    const textJob = sharp
-      ? Promise.race([warmReaders().then(r => r && Promise.race([readNameNumber(sharp.canvas), wait(3500).then(() => null)])), wait(9000).then(() => null)]).catch(() => null)
-      : Promise.resolve(null);
     const blob = await snap();
     // Der Fingerabdruck schlägt nur vor. Gezeigt wird, was dem Originalbild wirklich gleicht.
     const near = hits.filter(h => h.d <= hits[0].d + 14).slice(0, 20);
     const seenKey = new Set();
     const keys = near.filter(h => { const k = h.key.replace(/^[a-z]{2}:/, ''); return !seenKey.has(k) && seenKey.add(k); }).slice(0, 10);
-    const [found, text] = await Promise.all([Promise.all(keys.map(h => cardFromKey(h.key))), textJob]);
-    const cards = found.filter(Boolean);
-    if (closed) return;
-    // Mit gelesener Nummer kommen Karten dazu, die das Bild nicht vorgeschlagen hat, sofern der Name nicht dagegen spricht.
-    if (text && text.number && text.total) {
-      const extra = await Promise.race([findByNumber(text.number, text.total), wait(3000).then(() => [])]).catch(() => []);
-      for (const c of extra) if (!cards.some(k => k.id === c.id) && (!text.name || nameFits(text.name, c.name))) cards.push(c);
-    }
-    const fits = c => ({
-      name: !!(text && text.name) && nameFits(text.name, c.name),
-      number: numberFits(text, c.number),
-    });
+    const cards = (await Promise.all(keys.map(h => cardFromKey(h.key)))).filter(Boolean);
     // Für jede Karte zählt die Ansicht, in der sie am besten passt
     const scored = await Promise.all(cards.map(async c => {
       let m = null;
       for (const region of regions) { const v = await compareCard(region, c.image); if (v && (!m || v.blocks > m.blocks)) m = v; }
-      return { c, m, t: fits(c) };
+      return { c, m };
     }));
     if (closed) return;
     // Dasselbe Motiv gibt es oft in mehreren Sprachen: Bei fast gleichem Wert gewinnt Deutsch, dann Englisch.
-    // Passende Schrift zählt mit: Name und Nummer zusammen entscheiden zwischen ähnlichen Karten.
-    // Die Nummer allein trifft selten auch eine falsche Karte, deshalb zählt sie erst zusammen mit dem Namen voll.
-    const rankOf = s => s.m.blocks + s.m.whole * .2 + ({ de: .08, en: .04 }[String(s.c.id).split(':')[0]] || 0) + (s.t.name ? .1 : 0) + (s.t.number ? (s.t.name ? .1 : .03) : 0);
-    // Stimmen Name und Nummer, reicht auch ein schwächerer Bildvergleich (z. B. bei Spiegelung).
-    const good = scored.filter(s => s.m && (s.m.blocks >= MATCH_SURE || (s.t.name && s.t.number && s.m.blocks >= COVER_HINT))).sort((a, b) => rankOf(b) - rankOf(a));    // Der Name verrät die Sprache: passt er nicht, aber zu einer anderen Sprachfassung derselben Karte, wird diese gezeigt.
-    if (good.length && text && text.name && !good[0].t.name && good[0].c.game === 'pokemon') {
-      for (const l of ['de', 'en', 'ja']) {
-        const other = await getCard('pokemon', l + ':' + rawId(good[0].c)).catch(() => null);
-        if (other && nameFits(text.name, other.name)) { good[0] = { ...good[0], c: other }; break; }
-      }
-      if (closed) return;
-    }
+    const rankOf = s => s.m.blocks + s.m.whole * .2 + ({ de: .08, en: .04 }[String(s.c.id).split(':')[0]] || 0);
+    const good = scored.filter(s => s.m && s.m.blocks >= MATCH_SURE).sort((a, b) => rankOf(b) - rankOf(a));
     // Auch eine Karte, die wegen eines Fingers nicht sicher passt, soll den Grund erfahren.
     const likely = good[0] || scored.filter(s => s.m && s.m.blocks >= COVER_HINT).sort((a, b) => rankOf(b) - rankOf(a))[0];
     if (likely && likely.m.covered.length) {
