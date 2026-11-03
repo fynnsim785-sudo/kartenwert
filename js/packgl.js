@@ -579,8 +579,8 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
     group: { show: true, x: 0, y: .016, z: 0, s: 1, fan: 0, spread: 0, rx: 0 },
     attached: true, top: 0, dragX: 0, dragY: 0, dragging: false, showCards: false, focusTilt: 0,
     cards: cards.map((c, i) => ({
-      i, data: c, tex: texCards[i], hit: isHit(c), reveal: isHit(c) || i === cards.length - 1,
-      ry: isHit(c) || i === cards.length - 1 ? Math.PI : 0,
+      // Alle Karten kommen verdeckt aus dem Pack und werden einzeln aufgedeckt
+      i, data: c, tex: texCards[i], hit: isHit(c), reveal: true, ry: Math.PI,
       x: 0, y: 0, z: 0, rx: 0, rz: 0, s: 1, bend: 0, free: false, gone: false, vx: 0, vy: 0, vz: 0, wz: 0, wy: 0, holo: 0, aura: 0,
     })),
   };
@@ -1101,7 +1101,8 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
     info.hidden = false;
     info.classList.remove('in'); void info.offsetWidth; info.classList.add('in');
     if (covered) {
-      info.innerHTML = `<b class="pk-name">${c.hit ? 'Etwas Besonderes …' : 'Die letzte Karte'}</b><span class="pk-sub">Tippe zum Aufdecken</span>`;
+      const label = c.hit ? 'Etwas Besonderes …' : c.i === cards.length - 1 ? 'Die letzte Karte' : `Karte ${c.i + 1} von ${cards.length}`;
+      info.innerHTML = `<b class="pk-name">${label}</b><span class="pk-sub">Tippe zum Aufdecken</span>`;
       return;
     }
     const i = c.i;
@@ -1152,7 +1153,7 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
         c.x = 0; c.y = 0;
         scene.dragX = 0; scene.dragY = 0;
         if (c.reveal && !c.flipped) {
-          c.aura = c.hit ? 1 : .35;
+          c.aura = c.hit ? 1 : c.i === cards.length - 1 ? .35 : 0;
           showInfo(c, true);
           // Goldener Schimmer, der ankündigt, dass es gut wird
           if (c.hit) {
