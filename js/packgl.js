@@ -1,6 +1,7 @@
 // Pack öffnen als echte 3D-Szene (WebGL2): Folie mit Glanz, Riss der dem Finger folgt, Karten, Licht und Fetzen.
 // Ohne WebGL2 oder bei "weniger Bewegung" bleibt es bei der einfachen Fassung in packs.js.
 import { makeSound } from './packsound.js';
+import { nameLines } from './packs.js';
 
 const money = new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -263,6 +264,27 @@ function loadImage(url) {
   });
 }
 
+// Mischt eine Setfarbe mit Schwarz, optional halbdurchsichtig.
+function shade(hex, dark, alpha = 1) {
+  const n = parseInt(hex.slice(1), 16), f = 1 - dark;
+  return `rgba(${Math.round((n >> 16) * f)},${Math.round((n >> 8 & 255) * f)},${Math.round((n & 255) * f)},${alpha})`;
+}
+
+// Zwei schräge Streifen in der Setfarbe, damit die Folie nicht leer wirkt.
+function stripes(x, W, H, color) {
+  x.save();
+  x.translate(W / 2, 0);
+  x.rotate(-.42);
+  [[H * .1, H * .13, .7], [H * .66, H * .07, .5]].forEach(([y, h, a]) => {
+    const g = x.createLinearGradient(-W, 0, W, 0);
+    g.addColorStop(0, shade(color, 0, a)); g.addColorStop(1, shade(color, 0, a * .3));
+    x.fillStyle = g; x.fillRect(-W * 1.2, y, W * 2.4, h);
+    x.fillStyle = 'rgba(255,255,255,.35)';
+    x.fillRect(-W * 1.2, y, W * 2.4, 2); x.fillRect(-W * 1.2, y + h - 2, W * 2.4, 2);
+  });
+  x.restore();
+}
+
 // Vorderseite wie ein echter Booster: Motiv über die ganze Folie, unten schräg nur der Name des Packs.
 function drawFront(def, logo, art) {
   const W = 640, H = 1037;
@@ -281,15 +303,16 @@ function drawFront(def, logo, art) {
     const bw = ah * W / H;
     x.drawImage(art, ax + (aw - bw) / 2, ay, bw, ah, -40, -40, W + 80, H + 80);
     x.restore();
+    stripes(x, W, H, def.colors[0]);
     const sw = aw, sh = ah; // ganzes Kartenbild, damit kein Gesicht abgeschnitten wird
-    const dh = W * sh / sw, top = H * .42 - dh / 2;
+    const big = W * 1.16, dh = big * sh / sw, top = H * .39 - dh / 2;
     const pic = document.createElement('canvas');
     pic.width = W; pic.height = Math.round(dh);
     const px = pic.getContext('2d');
-    px.drawImage(art, ax + (aw - sw) / 2, ay, sw, sh, 0, 0, W, pic.height);
+    px.drawImage(art, ax + (aw - sw) / 2, ay, sw, sh, (W - big) / 2, 0, big, pic.height);
     px.globalCompositeOperation = 'destination-in';
     const fade = px.createLinearGradient(0, 0, 0, pic.height);
-    fade.addColorStop(0, 'rgba(0,0,0,0)'); fade.addColorStop(.22, '#000'); fade.addColorStop(.88, '#000'); fade.addColorStop(1, 'rgba(0,0,0,0)');
+    fade.addColorStop(0, 'rgba(0,0,0,0)'); fade.addColorStop(.16, '#000'); fade.addColorStop(.86, '#000'); fade.addColorStop(1, 'rgba(0,0,0,0)');
     px.fillStyle = fade; px.fillRect(0, 0, W, pic.height);
     x.drawImage(pic, 0, top);
   } else {
@@ -308,25 +331,41 @@ function drawFront(def, logo, art) {
     x.restore();
   }
   // Farbschleier unten in den Setfarben, damit der Name lesbar bleibt
-  const veil = x.createLinearGradient(0, H * .66, 0, H);
-  veil.addColorStop(0, 'rgba(0,0,0,0)'); veil.addColorStop(1, def.colors[1]);
-  x.fillStyle = veil; x.fillRect(0, H * .66, W, H * .34);
+  const veil = x.createLinearGradient(0, H * .62, 0, H);
+  veil.addColorStop(0, 'rgba(0,0,0,0)'); veil.addColorStop(.4, shade(def.colors[1], 0, .75)); veil.addColorStop(1, def.colors[1]);
+  x.fillStyle = veil; x.fillRect(0, H * .62, W, H * .38);
   x.save();
-  x.translate(W / 2, H * .82);
-  x.rotate(-.05);
+  x.translate(W / 2, H * .795);
+  x.rotate(-.087);
+  // Farbiges Band hinter dem Namen mit weißen Kanten
+  const bh = H * .19;
+  x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 24; x.shadowOffsetY = 10;
+  const band = x.createLinearGradient(-W * .6, 0, W * .6, 0);
+  band.addColorStop(0, shade(def.colors[0], .2)); band.addColorStop(.5, def.colors[0]); band.addColorStop(1, shade(def.colors[0], .3));
+  x.fillStyle = band; x.fillRect(-W * .62, -bh / 2, W * 1.24, bh);
+  x.shadowColor = 'transparent';
+  x.fillStyle = 'rgba(255,255,255,.85)';
+  x.fillRect(-W * .62, -bh / 2, W * 1.24, 4); x.fillRect(-W * .62, bh / 2 - 4, W * 1.24, 4);
   if (logo) {
-    const s = Math.min(W * .86 / logo.width, H * .18 / logo.height);
+    const s = Math.min(W * .86 / logo.width, bh * .92 / logo.height);
     const w = logo.width * s, h = logo.height * s;
-    x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 18; x.shadowOffsetY = 6;
+    x.shadowColor = 'rgba(0,0,0,.55)'; x.shadowBlur = 8; x.shadowOffsetY = 3;
     x.drawImage(logo, -w / 2, -h / 2, w, h);
   } else {
-    x.textAlign = 'center'; x.textBaseline = 'middle';
-    let size = 84;
-    x.font = `italic 900 ${size}px Lato, system-ui, sans-serif`;
-    while (x.measureText(def.name).width > W * .84 && size > 36) { size -= 4; x.font = `italic 900 ${size}px Lato, system-ui, sans-serif`; }
-    x.lineJoin = 'round';
-    x.lineWidth = 12; x.strokeStyle = '#10204f'; x.strokeText(def.name, 0, 0);
-    x.fillStyle = '#fff'; x.fillText(def.name, 0, 0);
+    const lines = nameLines(def.name);
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+    let size = 110;
+    const font = () => `italic 900 ${size}px Lato, system-ui, sans-serif`;
+    x.font = font();
+    while ((Math.max(...lines.map(l => x.measureText(l).width)) > W * .86 || size * 1.02 * lines.length > bh * .9) && size > 30) { size -= 2; x.font = font(); }
+    const lh = size * 1.02, y0 = -(lines.length - 1) * lh / 2;
+    const edge = shade(def.colors[1], .45);
+    lines.forEach((l, i) => {
+      const y = y0 + i * lh;
+      x.fillStyle = shade(def.colors[1], .6); x.fillText(l, size * .05, y + size * .07);
+      x.lineWidth = size * .2; x.strokeStyle = edge; x.strokeText(l, 0, y);
+      x.fillStyle = '#fff'; x.fillText(l, 0, y);
+    });
   }
   x.restore();
   return c;

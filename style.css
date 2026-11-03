@@ -720,7 +720,7 @@ h2 { font-weight: 900; }
 .packnote { margin: 8px 0 0; font-size: 12.5px; color: var(--sub); }
 
 /* Folie des Packs */
-.pk-face { position: absolute; inset: 0; color: #fff; overflow: hidden; background:
+.pk-face { position: absolute; inset: 0; color: #fff; overflow: hidden; container-type: inline-size; background:
   repeating-linear-gradient(97deg, rgba(255,255,255,.035) 0 2px, rgba(0,0,0,.035) 2px 5px),
   radial-gradient(120% 70% at 30% 25%, rgba(255,255,255,.3), rgba(255,255,255,0) 62%),
   linear-gradient(160deg, var(--p1), var(--p2)); }
@@ -729,11 +729,15 @@ h2 { font-weight: 900; }
 .pk-crimp.bot { bottom: 0; border-top: 1px solid rgba(0,0,0,.28); }
 .pk-fold { position: absolute; top: 0; bottom: 0; left: 0; right: 0; background: linear-gradient(90deg, rgba(0,0,0,.34), rgba(255,255,255,.1) 6%, rgba(255,255,255,0) 16%, rgba(255,255,255,0) 84%, rgba(255,255,255,.08) 94%, rgba(0,0,0,.34)); }
 .pk-blur { position: absolute; inset: -12%; background-size: 330% auto; background-position: 50% 26%; filter: blur(7px) saturate(1.25) brightness(.9); }
-.pk-pic { position: absolute; left: 0; right: 0; top: 21.5%; height: 35.5%; background-size: 120.5% auto; background-position: 50% 22%; background-repeat: no-repeat; -webkit-mask-image: linear-gradient(transparent, #000 22%, #000 88%, transparent); mask-image: linear-gradient(transparent, #000 22%, #000 88%, transparent); }
-.pk-veil { position: absolute; inset: 0; background: linear-gradient(transparent 66%, var(--p2)); }
-.pk-art { position: absolute; left: 7%; right: 7%; top: 72%; height: 18%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; transform: rotate(-3deg); }
-.pk-art img { max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,.6)); }
-.pk-jp { font-size: 1.15em; font-style: italic; font-weight: 900; line-height: 1.25; -webkit-text-stroke: .12em #10204f; paint-order: stroke fill; }
+.pk-pic { position: absolute; left: -8%; right: -8%; top: 16%; height: 46%; background-size: 100% auto; background-position: 50% 22%; background-repeat: no-repeat; -webkit-mask-image: linear-gradient(transparent, #000 16%, #000 86%, transparent); mask-image: linear-gradient(transparent, #000 16%, #000 86%, transparent); }
+.pk-veil { position: absolute; inset: 0; background: linear-gradient(transparent 62%, color-mix(in srgb, var(--p2) 75%, transparent) 78%, var(--p2)); }
+.pk-art { position: absolute; left: 0; right: 0; top: 69%; height: 21%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; transform: rotate(-5deg); }
+.pk-art img { position: relative; max-width: 86%; max-height: 92%; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.55)); }
+.pk-jp { position: relative; max-width: 92%; font-style: italic; font-weight: 900; line-height: 1.02; letter-spacing: -.01em; -webkit-text-stroke: .14em color-mix(in srgb, var(--p2) 55%, #000); paint-order: stroke fill; text-shadow: .05em .07em 0 color-mix(in srgb, var(--p2) 40%, #000); }
+.pk-stripe { position: absolute; left: -30%; right: -30%; height: 13%; transform: rotate(-24deg); background: linear-gradient(90deg, color-mix(in srgb, var(--p1) 70%, transparent), color-mix(in srgb, var(--p1) 20%, transparent)); border-top: 1px solid rgba(255,255,255,.35); border-bottom: 1px solid rgba(255,255,255,.35); }
+.pk-stripe.a { top: 6%; }
+.pk-stripe.b { top: 60%; height: 7%; opacity: .7; }
+.pk-band { position: absolute; left: -6%; right: -6%; top: 6%; bottom: 6%; background: linear-gradient(90deg, color-mix(in srgb, var(--p1) 80%, #000), var(--p1) 50%, color-mix(in srgb, var(--p1) 70%, #000)); border-top: .6cqw solid rgba(255,255,255,.85); border-bottom: .6cqw solid rgba(255,255,255,.85); box-shadow: 0 1.5cqw 3cqw rgba(0,0,0,.35); }
 .pk-sheen { position: absolute; inset: -20% -60%; background: linear-gradient(105deg, rgba(255,255,255,0) 42%, rgba(255,255,255,.34) 50%, rgba(255,255,255,0) 58%); animation: pksheen 3.6s ease-in-out infinite; }
 @keyframes pksheen { 0%, 45% { transform: translateX(-42%); } 80%, 100% { transform: translateX(42%); } }
 @keyframes pkfloat { 0%, 100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-6px) rotate(1deg); } }

@@ -125,14 +125,30 @@ export async function rollPack(def, isOwned) {
 }
 
 // Wie ein echter Booster: Motiv über die ganze Folie, unten nur der Name des Packs.
+// Lange Namen kommen auf zwei Zeilen, damit die Schrift groß bleibt.
+export function nameLines(name) {
+  const words = name.split(' ');
+  if (name.length <= 9 || words.length < 2) return [name];
+  let best = [name], worst = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const w = Math.max(words.slice(0, i).join(' ').length, words.slice(i).join(' ').length);
+    if (w < worst) { worst = w; best = [words.slice(0, i).join(' '), words.slice(i).join(' ')]; }
+  }
+  return best;
+}
+
 export function packFace(def) {
+  const lines = nameLines(def.name);
+  const size = Math.min(17, 128 / Math.max(...lines.map(l => l.length), 5)); // in Prozent der Packbreite
   return `<div class="pk-face" style="--p1:${def.colors[0]};--p2:${def.colors[1]}">
     <i class="pk-blur" style="background-image:url('${esc(def.art)}/low.webp')"></i>
+    <i class="pk-stripe a"></i><i class="pk-stripe b"></i>
     <i class="pk-pic" style="background-image:url('${esc(def.art)}/high.webp')"></i>
     <i class="pk-veil"></i>
     <i class="pk-crimp top"></i><i class="pk-crimp bot"></i><i class="pk-fold"></i>
     <div class="pk-art">
-      ${def.logo ? `<img src="${esc(def.logo)}" alt="${esc(def.name)}">` : `<b class="pk-jp">${esc(def.name)}</b>`}
+      <i class="pk-band"></i>
+      ${def.logo ? `<img src="${esc(def.logo)}" alt="${esc(def.name)}">` : `<b class="pk-jp" style="font-size:${size.toFixed(1)}cqw">${lines.map(esc).join('<br>')}</b>`}
     </div>
     <i class="pk-sheen"></i>
   </div>`;
