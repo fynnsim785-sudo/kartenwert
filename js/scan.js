@@ -238,6 +238,88 @@ function band(crop, top, height) {
   return c;
 }
 
+// Texterkennung für den Live-Scanner: Die Leser bleiben geladen, damit jede weitere Karte schnell geht.
+let readers = null;
+export function warmReaders() {
+  readers = readers || (async () => {
+    if (!window.Tesseract) await loadScript(TESSERACT);
+    // Eine Ziffern-Liste würde den Leser verwirren: Die Nummer steht zwischen Zeichner, Set-Kürzel und Copyright.
+    const [name, digits] = await Promise.all([window.Tesseract.createWorker('deu+eng'), window.Tesseract.createWorker('eng')]);
+    await digits.setParameters({ tessedit_pageseg_mode: '11' }); // verstreuter Text: findet die kleine Nummer am besten
+    return { name, digits };
+  })().catch(() => { readers = null; return null; });
+  return readers;
+}
+
+// Schreibweise für den Namensvergleich: klein, ohne Akzente, ohne Zusätze wie ex, V, VMAX.
+export const plainName = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/\b(ex|gx|v|vmax|vstar|lv\.?\s*x|break|prime|star|δ|delta)\b/g, ' ').replace(/[^a-z0-9぀-鿿 ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+function similar(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const m = a.length, n = b.length;
+  let row = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const next = [i];
+    for (let j = 1; j <= n; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    row = next;
+  }
+  return 1 - row[n] / Math.max(m, n);
+}
+
+// Passt der gelesene Name zur Karte? Ein Wort aus dem Namen genügt, wenn es fast gleich geschrieben ist.
+export function nameFits(read, cardName) {
+  const want = plainName(cardName);
+  if (!read || !want) return false;
+  const words = read.split(' ').filter(w => w.length >= 3);
+  if (similar(read, want) >= .75) return true;
+  return want.split(' ').filter(w => w.length >= 4).some(w => words.some(r => similar(r, w) >= .8));
+}
+
+// Liest Namen (oben) und Nummer (unten) von einer gerade gezogenen Karte. Liefert leere Werte, wenn nichts lesbar ist.
+export async function readNameNumber(card) {
+  const r = await warmReaders();
+  if (!r) return { name: '', number: '', total: '' };
+  const part = (left, top, w, h, scale = 2) => {
+    const c = document.createElement('canvas');
+    c.width = Math.round(card.width * w * scale); c.height = Math.round(card.height * h * scale);
+    const x = c.getContext('2d');
+    x.filter = 'grayscale(1) contrast(1.6)';
+    x.drawImage(card, card.width * left, card.height * top, card.width * w, card.height * h, 0, 0, c.width, c.height);
+    return c;
+  };
+  // Neuere Karten tragen die Nummer unten links, ältere unten rechts: beide Ecken lesen.
+  const [top, left, right] = await Promise.all([
+    r.name.recognize(part(.04, .02, .72, .11)),
+    r.digits.recognize(part(0, .85, .5, .145, 3.5)),
+    r.digits.recognize(part(.5, .85, .5, .145, 3.5)),
+  ]);
+  let name = '';
+  for (const line of (top.data.text || '').split('\n')) {
+    const words = plainName(line).split(' ').filter(w => w.length >= 3 && /^[a-z぀-鿿]+$/.test(w) && !STOP.has(w));
+    const cand = words.sort((a, b) => b.length - a.length)[0] || '';
+    if (cand.length > name.length) name = cand;
+  }
+  const low = `${left.data.text || ''}\n${right.data.text || ''}`;
+  const { number, total } = parseText(low);
+  // Alle Zahlengruppen merken: Auch eine halb gelesene Nummer (Schrägstrich als 7 oder Komma) bestätigt eine Karte.
+  // Jahreszahlen aus dem Copyright (© 2021) fallen weg, sonst passten sie zu Karte 202.
+  const digits = (low.match(/\d{2,4}/g) || []).filter(d => !(d.length === 4 && +d >= 1995 && +d <= 2035));
+  return { name, number, total, digits };
+}
+
+// Passt die gelesene Nummer zur Karte? Eindeutig gelesen oder als Zahlengruppe vorhanden.
+export function numberFits(read, cardNumber) {
+  const want = String(cardNumber || '').replace(/^0+/, '');
+  if (!read || !want) return false;
+  if (read.number && read.number.replace(/^0+/, '') === want) return true;
+  if (want.length < 2) return false;
+  const padded = want.padStart(3, '0');
+  // Ein verschluckter Schrägstrich hängt eine Ziffer an (092/131 wird zu 0927): genau eine zusätzliche Ziffer ist erlaubt.
+  return (read.digits || []).some(d => d === want || d === padded || (d.length === padded.length + 1 && d.startsWith(padded)));
+}
+
 // Erkennt die Karte auf einem Foto. sure sagt, ob das Kartenbild wirklich zum Foto passt.
 export async function identify(blob, game, onStep = () => {}) {
   // Zuerst über das Aussehen suchen, das dauert nur einen Moment.
