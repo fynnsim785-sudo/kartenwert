@@ -100,17 +100,16 @@ export async function rollPack(def, isOwned) {
   return chosen;
 }
 
-const TIER_TAG = { normal: 'Booster', ja: '日本語版', old: 'Klassiker' };
-
+// Wie ein echter Booster: Motiv über die ganze Folie, unten nur der Name des Packs.
 export function packFace(def) {
   return `<div class="pk-face" style="--p1:${def.colors[0]};--p2:${def.colors[1]}">
+    <i class="pk-blur" style="background-image:url('${esc(def.art)}/low.webp')"></i>
+    <i class="pk-pic" style="background-image:url('${esc(def.art)}/high.webp')"></i>
+    <i class="pk-veil"></i>
     <i class="pk-crimp top"></i><i class="pk-crimp bot"></i><i class="pk-fold"></i>
-    <i class="pk-pic" style="background-image:url('${esc(def.art)}/low.webp')"></i>
     <div class="pk-art">
       ${def.logo ? `<img src="${esc(def.logo)}" alt="${esc(def.name)}">` : `<b class="pk-jp">${esc(def.name)}</b>`}
     </div>
-    <span class="pk-tag">${TIER_TAG[def.tier]}</span>
-    <span class="pk-count">${def.count} Karten</span>
     <i class="pk-sheen"></i>
   </div>`;
 }

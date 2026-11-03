@@ -263,6 +263,7 @@ function loadImage(url) {
   });
 }
 
+// Vorderseite wie ein echter Booster: Motiv über die ganze Folie, unten schräg nur der Name des Packs.
 function drawFront(def, logo, art) {
   const W = 640, H = 1037;
   const c = document.createElement('canvas');
@@ -271,76 +272,63 @@ function drawFront(def, logo, art) {
   const g = x.createLinearGradient(0, 0, W * .7, H);
   g.addColorStop(0, def.colors[0]); g.addColorStop(1, def.colors[1]);
   x.fillStyle = g; x.fillRect(0, 0, W, H);
-  // Strahlen hinter dem Logo
-  x.save();
-  x.translate(W / 2, H * .5);
-  for (let i = 0; i < 36; i++) {
-    x.rotate(Math.PI * 2 / 36);
-    x.fillStyle = i % 2 ? 'rgba(255,255,255,.075)' : 'rgba(0,0,0,.055)';
-    x.beginPath(); x.moveTo(0, 0); x.lineTo(-70, -H); x.lineTo(70, -H); x.fill();
-  }
-  x.restore();
-  const glow = x.createRadialGradient(W / 2, H * .5, 20, W / 2, H * .5, W * .7);
-  glow.addColorStop(0, 'rgba(255,255,255,.5)'); glow.addColorStop(1, 'rgba(255,255,255,0)');
-  x.fillStyle = glow; x.fillRect(0, 0, W, H);
-  // Kartenbild aus dem Set, oben und unten weich ausgeblendet. Ohne Bild drei angedeutete Karten.
+  // Motiv: Das Kartenbild ist breit, das Pack hoch. Damit das ganze Pokémon samt Gesicht zu sehen ist, steht das Bild
+  // fast in voller Breite in der Mitte. Darüber und darunter füllt dasselbe Bild unscharf die Folie.
   if (art) {
-    const top = H * .27, bandH = H * .52;
+    const ax = art.width * .085, ay = art.height * .11, aw = art.width * .83, ah = art.height * .41;
+    x.save();
+    x.filter = 'blur(18px) saturate(1.25) brightness(.9)';
+    const bw = ah * W / H;
+    x.drawImage(art, ax + (aw - bw) / 2, ay, bw, ah, -40, -40, W + 80, H + 80);
+    x.restore();
+    const sw = aw * .82, sh = ah;
+    const dh = W * sh / sw, top = H * .42 - dh / 2;
     const pic = document.createElement('canvas');
-    pic.width = W; pic.height = Math.round(bandH);
+    pic.width = W; pic.height = Math.round(dh);
     const px = pic.getContext('2d');
-    px.drawImage(art, art.width * .17, art.height * .125, art.width * .66, art.height * .39, 0, 0, W, pic.height);
+    px.drawImage(art, ax + (aw - sw) / 2, ay, sw, sh, 0, 0, W, pic.height);
     px.globalCompositeOperation = 'destination-in';
     const fade = px.createLinearGradient(0, 0, 0, pic.height);
-    fade.addColorStop(0, 'rgba(0,0,0,0)'); fade.addColorStop(.14, '#000'); fade.addColorStop(.86, '#000'); fade.addColorStop(1, 'rgba(0,0,0,0)');
+    fade.addColorStop(0, 'rgba(0,0,0,0)'); fade.addColorStop(.1, '#000'); fade.addColorStop(.9, '#000'); fade.addColorStop(1, 'rgba(0,0,0,0)');
     px.fillStyle = fade; px.fillRect(0, 0, W, pic.height);
     x.drawImage(pic, 0, top);
-  }
-  x.save();
-  x.translate(W / 2, H * .6);
-  if (!art) [-.32, 0, .32].forEach((a, i) => {
-    x.save();
-    x.rotate(a);
-    x.translate((i - 1) * 30, -Math.abs(i - 1) * -8);
-    x.fillStyle = 'rgba(255,255,255,.2)';
-    x.strokeStyle = 'rgba(255,255,255,.65)';
-    x.lineWidth = 5;
-    x.beginPath(); x.roundRect(-58, -82, 116, 164, 10); x.fill(); x.stroke();
-    x.restore();
-  });
-  x.restore();
-  // Bänder oben und unten
-  const band = x.createLinearGradient(0, 0, 0, 90);
-  band.addColorStop(0, 'rgba(255,255,255,.5)'); band.addColorStop(1, 'rgba(255,255,255,.08)');
-  x.fillStyle = band; x.fillRect(0, 0, W, 78); x.fillRect(0, H - 78, W, 78);
-  x.fillStyle = 'rgba(0,0,0,.3)'; x.fillRect(0, 78, W, 3); x.fillRect(0, H - 81, W, 3);
-  if (logo) {
-    const s = Math.min(W * .84 / logo.width, H * .17 / logo.height);
-    const w = logo.width * s, h = logo.height * s;
-    x.shadowColor = 'rgba(0,0,0,.55)'; x.shadowBlur = 22; x.shadowOffsetY = 7;
-    x.drawImage(logo, (W - w) / 2, H * .205 - h / 2, w, h);
-    x.shadowColor = 'transparent';
   } else {
-    x.fillStyle = '#fff';
-    x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 16; x.shadowOffsetY = 5;
-    let size = 88;
-    x.font = `800 ${size}px Lato, system-ui, sans-serif`;
-    while (x.measureText(def.name).width > W * .84 && size > 40) { size -= 4; x.font = `800 ${size}px Lato, system-ui, sans-serif`; }
-    x.fillText(def.name, W / 2, H * .205);
-    x.shadowColor = 'transparent';
+    x.save();
+    x.translate(W / 2, H * .45);
+    [-.32, 0, .32].forEach((a, i) => {
+      x.save();
+      x.rotate(a);
+      x.translate((i - 1) * 30, Math.abs(i - 1) * 8);
+      x.fillStyle = 'rgba(255,255,255,.2)';
+      x.strokeStyle = 'rgba(255,255,255,.65)';
+      x.lineWidth = 5;
+      x.beginPath(); x.roundRect(-58, -82, 116, 164, 10); x.fill(); x.stroke();
+      x.restore();
+    });
+    x.restore();
   }
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  const tag = { normal: 'BOOSTER', ja: '日本語版', old: 'KLASSIKER' }[def.tier];
-  x.font = '800 30px Lato, system-ui, sans-serif';
-  const tw = x.measureText(tag).width + 56;
-  x.fillStyle = 'rgba(0,0,0,.42)';
-  x.beginPath(); x.roundRect((W - tw) / 2, H * .805 - 26, tw, 52, 26); x.fill();
-  x.fillStyle = '#fff';
-  x.fillText(tag, W / 2, H * .805 + 1);
-  x.font = '800 38px Lato, system-ui, sans-serif';
-  x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 8;
-  x.fillText(`${def.count} KARTEN`, W / 2, H * .875);
+  // Farbschleier unten in den Setfarben, damit der Name lesbar bleibt
+  const veil = x.createLinearGradient(0, H * .66, 0, H);
+  veil.addColorStop(0, 'rgba(0,0,0,0)'); veil.addColorStop(1, def.colors[1]);
+  x.fillStyle = veil; x.fillRect(0, H * .66, W, H * .34);
+  x.save();
+  x.translate(W / 2, H * .82);
+  x.rotate(-.05);
+  if (logo) {
+    const s = Math.min(W * .86 / logo.width, H * .18 / logo.height);
+    const w = logo.width * s, h = logo.height * s;
+    x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 18; x.shadowOffsetY = 6;
+    x.drawImage(logo, -w / 2, -h / 2, w, h);
+  } else {
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    let size = 84;
+    x.font = `italic 900 ${size}px Lato, system-ui, sans-serif`;
+    while (x.measureText(def.name).width > W * .84 && size > 36) { size -= 4; x.font = `italic 900 ${size}px Lato, system-ui, sans-serif`; }
+    x.lineJoin = 'round';
+    x.lineWidth = 12; x.strokeStyle = '#10204f'; x.strokeText(def.name, 0, 0);
+    x.fillStyle = '#fff'; x.fillText(def.name, 0, 0);
+  }
+  x.restore();
   return c;
 }
 
