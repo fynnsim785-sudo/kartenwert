@@ -35,7 +35,7 @@ export const PACKS = [
   pack('ja', 'ja', 'SV6a', 'Night Wanderer', 6, '#3a3a6a', '#0f0f20'),
   pack('ja', 'ja', 'SV5a', 'Crimson Haze', 6, '#d42b4a', '#3d0f2a'),
   pack('ja', 'ja', 'SV9', 'Battle Partners', 6, '#e8723a', '#2a1a4a'),
-  pack('ja', 'ja', 'SV4a', 'Raging Surf', 8, '#2f86d8', '#10305e'),
+  pack('ja', 'ja', 'SV4a', 'Shiny Treasure ex', 8, '#2f86d8', '#10305e'),
   pack('ja', 'ja', 'SV10', 'Glory of Team Rocket', 8, '#3a3a44', '#a3271e'),
   pack('ja', 'ja', 'SV2a', 'Pokémon Card 151', 10, '#e8423a', '#1f4fa8'),
   pack('ja', 'ja', 'SV8a', 'Terastal Festival', 10, '#c04fd8', '#2d6fd0'),
@@ -66,11 +66,16 @@ const LOGO = {
   sv05: 'https://images.pokemontcg.io/sv5/logo.png',
   sv01: 'https://assets.tcgdex.net/en/sv/sv01/logo.webp',
   ecard1: 'https://assets.tcgdex.net/en/ecard/ecard1/logo.webp',
+  // Japanische Sets: Logo der englischen Ausgabe, in der ihre Karten erschienen sind
+  SV7a: 'https://images.pokemontcg.io/sv8/logo.png', SV6a: 'https://images.pokemontcg.io/sv6pt5/logo.png',
+  SV5a: 'https://images.pokemontcg.io/sv6/logo.png', SV9: 'https://images.pokemontcg.io/sv9/logo.png',
+  SV4a: 'https://images.pokemontcg.io/sv4pt5/logo.png', SV10: 'https://images.pokemontcg.io/sv10/logo.png',
+  SV2a: 'https://images.pokemontcg.io/sv3pt5/logo.png', SV8a: 'https://images.pokemontcg.io/sv8pt5/logo.png',
 };
 // Für japanische Sets gibt es keine freien Logos, dort steht der Originalname wie auf dem echten Pack.
 const JP = {
   SV7a: '楽園ドラゴーナ', SV6a: 'ナイトワンダラー', SV5a: 'クリムゾンヘイズ', SV9: 'バトルパートナーズ',
-  SV4a: 'レイジングサーフ', SV10: 'ロケット団の栄光', SV2a: 'ポケモンカード151', SV8a: 'テラスタルフェスex',
+  SV4a: 'シャイニートレジャーex', SV10: 'ロケット団の栄光', SV2a: 'ポケモンカード151', SV8a: 'テラスタルフェスex',
 };
 for (const p of PACKS) {
   p.art = `https://assets.tcgdex.net/${ART[p.id]}`;
