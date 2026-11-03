@@ -503,6 +503,15 @@ async function openLive() {
         save();
         flyToCollection(img, '+' + money.format(card.price || 0));
       },
+      // Gleich nach dem Scannen versteigern: Karte öffnen und zum Preisfeld springen.
+      onAuction(card) {
+        const c = owned(card);
+        if (!c) return;
+        if (!ui.marketReady) { toast('Auktionen sind gerade nicht erreichbar. Die Karte liegt in deiner Sammlung.'); return; }
+        openCard(c.key);
+        const field = document.getElementById('sellPrice');
+        if (field) { field.scrollIntoView({ block: 'center', behavior: 'smooth' }); field.focus({ preventScroll: true }); }
+      },
       onGallery() {
         switchTab('scan');
         document.getElementById('file').click();
@@ -669,7 +678,7 @@ function renderProfile() {
       <p>Gekaufte und ersteigerte Karten sind nur digital. Zur Sammlung zählen Kamera-Scans mit Echtheitsprobe und Käufe, Galerie-Bilder nicht.</p>
       <p>Auktionen laufen nur mit App-Guthaben. Geprüft wird auf dem Gerät, von den Fotos bleibt nur ein Fingerabdruck auf dem Server.</p>
       <p>Sammlung und Name liegen nur auf diesem Gerät. Fotos werden nie hochgeladen.</p>
-      <p>Version 1.6.0</p>
+      <p>Version 1.7.0</p>
     </details>`;
 }
 

@@ -43,11 +43,11 @@ export function soundEngine(ctx, out = ctx.destination) {
   const now = () => ctx.currentTime;
   const pick = list => list[Math.floor(Math.random() * list.length)];
 
-  function grain(t, level, freq, q = 2) {
+  function grain(t, level, freq, q = 2, dest = bus) {
     const s = ctx.createBufferSource(); s.buffer = pick(grains);
     const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
     const g = ctx.createGain(); g.gain.value = level * 3.2;
-    s.connect(f); f.connect(g); g.connect(bus);
+    s.connect(f); f.connect(g); g.connect(dest);
     s.start(Math.max(t, now()));
   }
   // Knistern: zufällige Klicks, meist hell, manchmal dumpfer
@@ -90,33 +90,42 @@ export function soundEngine(ctx, out = ctx.destination) {
     grain(t, level * .7, 620 + Math.random() * 300, 1);
   }
 
-  // Dauerton beim Reißen: Rauschen, das sehr schnell an und aus geht, klingt wie ein Reißverschluss aus Folie.
-  let rip = null, carry = 0;
+  // Reißen besteht aus zwei Schichten: einer Kette dicht folgender Knackser (die Folie gibt Stück für Stück nach)
+  // und einem dumpfen Rauschen, wenn sich das Material dehnt. Beides wandert mit dem Riss von links nach rechts.
+  let rip = null, carry = 0, zip = 0;
   function ripBed() {
     if (rip) return rip;
+    const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : ctx.createGain();
+    pan.connect(bus);
     const s = ctx.createBufferSource(); s.buffer = noise; s.loop = true;
-    const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1700;
-    const chop = ctx.createGain(); chop.gain.value = .5;
-    const lfo = ctx.createOscillator(); lfo.type = 'sawtooth'; lfo.frequency.value = 90;
-    const depth = ctx.createGain(); depth.gain.value = .5;
-    lfo.connect(depth); depth.connect(chop.gain);
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 650; f.Q.value = .9;
     const g = ctx.createGain(); g.gain.value = 0;
-    s.connect(f); f.connect(chop); chop.connect(g); g.connect(bus);
-    s.start(); lfo.start();
-    rip = { g, lfo };
+    s.connect(f); f.connect(g); g.connect(pan);
+    s.start();
+    rip = { g, pan, f };
     return rip;
   }
 
   return {
     master,
-    tearing(level) {
+    tearing(level, where = 0) {
       const bed = ripBed(), t = now();
-      bed.g.gain.setTargetAtTime(level * .34, t, .012);
-      bed.lfo.frequency.setTargetAtTime(55 + level * 260, t, .02);
-      carry += level * 3.4;
+      if (bed.pan.pan) bed.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, where)), t, .02);
+      bed.g.gain.setTargetAtTime(level * .18, t, .015);
+      bed.f.frequency.setTargetAtTime(500 + level * 700, t, .03);
+      // Knackserkette: je schneller gerissen wird, desto dichter, mit leicht unregelmäßigem Takt
+      zip += (40 + level * 420) * .016 * (level > .02 ? 1 : 0);
+      while (zip >= 1) {
+        zip -= 1;
+        const at = t + Math.random() * .016;
+        grain(at, .16 + level * .4 + Math.random() * .12, 3000 + Math.random() * 3500, 3, bed.pan);
+        if (Math.random() < .35) grain(at, .1 + level * .25, 900 + Math.random() * 700, 1.4, bed.pan);
+      }
+      // Dazwischen einzelne lautere Knister
+      carry += level * 1.6;
       while (carry >= 1) {
         carry -= 1;
-        grain(t + Math.random() * .016, .22 + Math.random() * .5, 2000 + Math.random() * 7500, 2);
+        grain(t + Math.random() * .016, .25 + Math.random() * .55, 2000 + Math.random() * 7500, 2, bed.pan);
       }
     },
     // Letztes Stück Folie gibt nach, mit einem kurzen Luftstoß
@@ -134,7 +143,7 @@ export function soundEngine(ctx, out = ctx.destination) {
       tone(t, 118, .1, .5);
       crackle(t, 16, .09, .5);
     },
-    rustle() { crackle(now(), 26, .55, .28); },
+    rustle(level = 1) { crackle(now(), Math.round(6 + level * 20), .15 + level * .4, .12 + level * .2); },
     // Karten rutschen aus der Folie
     slide() {
       const t = now();
@@ -197,7 +206,11 @@ export function makeSound() {
     } catch { ctx = null; engine = null; }
     return engine;
   }
-  const play = name => (...args) => { const e = ready(); if (e) e[name](...args); };
+  const play = name => (...args) => {
+    const e = ready();
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+    if (e) e[name](...args);
+  };
   return {
     get muted() { return muted; },
     toggle() {

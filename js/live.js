@@ -3,6 +3,7 @@ import { VISUAL_SURE, visualSearch, cardFromKey, identify, checkPhoto, loadIndex
 import { GAMES, getCard } from './cards.js';
 import { MATCH_SURE, COVER_HINT, readRegion, compareCard } from './match.js';
 import { createNight } from './night.js';
+import { findCard, straighten } from './detect.js';
 import { ICON } from './icons.js';
 import { cardFlight } from './fx.js';
 import { runProof, quickSteps, cameraAllowed } from './proof.js';
@@ -13,7 +14,7 @@ const rawId = c => String(c.id).replace(/^[a-z]{2}:/, '');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const thumb = c => c.image || '';
 
-export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
+export async function openScanner({ game, hashes, hasCard, onAdd, onAuction, onGallery }) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no-camera');
   const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
 
@@ -27,6 +28,7 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
   el.innerHTML = `
     <video playsinline autoplay muted></video>
     <div class="frame"><i></i><i></i><i></i><i></i></div>
+    <svg class="cardline" aria-hidden="true"><polygon points=""/></svg>
     <div class="livetop">
       <button class="liveicon" data-live="close" aria-label="Schließen">${ICON.close}</button>
       <span class="livecount" hidden></span>
@@ -93,6 +95,37 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
     return { src: bright, r: { x: r.x * k, y: r.y * k, w: r.w * k, h: r.h * k } };
   }
 
+  const outline = el.querySelector('.cardline');
+  const outlinePoly = outline.querySelector('polygon');
+  let outlineAt = 0;
+  // Zeigt den gefundenen Kartenumriss auf dem Bildschirm, damit man sieht, dass die Karte erfasst ist.
+  function showOutline(corners, k) {
+    if (!corners) { if (Date.now() - outlineAt > 600) outline.classList.remove('on'); return; }
+    const v = video.getBoundingClientRect(), b = el.getBoundingClientRect();
+    const s = Math.max(v.width / video.videoWidth, v.height / video.videoHeight);
+    const ox = (v.width - video.videoWidth * s) / 2 + v.left - b.left, oy = (v.height - video.videoHeight * s) / 2 + v.top - b.top;
+    outlinePoly.setAttribute('points', corners.map(([x, y]) => `${(ox + x / k * s).toFixed(1)},${(oy + y / k * s).toFixed(1)}`).join(' '));
+    outline.classList.add('on');
+    outlineAt = Date.now();
+  }
+  function views(pic) {
+    const list = [];
+    const corners = findCard(pic.src, pic.r);
+    if (corners) {
+      const flat = straighten(pic.src, corners);
+      if (flat) list.push({ src: flat.canvas, r: flat.rect, flat: true });
+    }
+    showOutline(corners, pic.src === video ? 1 : night.scale);
+    list.push(pic);
+    return list;
+  }
+  const mergeHits = lists => {
+    const best = new Map();
+    for (const list of lists) for (const h of list) { const p = best.get(h.key); if (!p || h.d < p.d) best.set(h.key, h); }
+    return [...best.values()].sort((a, b) => a.d - b.d);
+  };
+  let coverStrike = 0;
+
   function setTorch(value) {
     torch = value;
     track.applyConstraints({ advanced: [{ torch }] }).catch(() => {});
@@ -154,7 +187,7 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
     return new Promise(res => c.toBlob(res, 'image/jpeg', .92));
   }
   function crop() {
-    const { src, r } = picture();
+    const { src, r } = views(picture())[0];
     const c = document.createElement('canvas');
     c.width = Math.round(r.w); c.height = Math.round(r.h);
     c.getContext('2d').drawImage(src, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
@@ -185,7 +218,7 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
         <h3>${esc(top.name)}</h3>
         <span class="muted small">${esc(top.set)}${top.number ? ' · #' + esc(top.number) : ''}</span>
         <b class="hitprice">${top.price ? money.format(top.price) : 'Kein Preis'}</b>
-        ${hasCard(top) ? '<button class="btn" data-live="skip">Hast du schon · Weiter</button>' : '<button class="btn" data-live="add">Hinzufügen</button>'}
+        ${hasCard(top) ? '<button class="btn" data-live="skip">Hast du schon · Weiter</button>' : `<button class="btn" data-live="add">In die Sammlung</button>${onAuction ? '<button class="btn sec" data-live="add" data-then="auction">Hinzufügen und versteigern</button>' : ''}`}
         ${hasCard(top) ? '' : '<button class="livelink dark" data-live="skip">Falsche Karte</button>'}
       </div>
       ${top.game === 'pokemon' ? `<div class="langs">${Object.entries(LANGS).map(([l, name]) => `<button data-live="lang" data-lang="${l}" class="${String(top.id).startsWith(l + ':') ? 'on' : ''}">${name}</button>`).join('')}</div>` : ''}
@@ -203,21 +236,31 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
     hint.textContent = 'Erkannt';
     const pic = await freshPicture();
     if (closed) return;
-    const region = readRegion(pic.src, pic.r);
+    const regions = views(pic).map(v => readRegion(v.src, v.r));
     const blob = await snap();
     // Der Fingerabdruck schlägt nur vor. Gezeigt wird, was dem Originalbild wirklich gleicht.
     const near = hits.filter(h => h.d <= hits[0].d + 14).slice(0, 20);
     const seenKey = new Set();
     const keys = near.filter(h => { const k = h.key.replace(/^[a-z]{2}:/, ''); return !seenKey.has(k) && seenKey.add(k); }).slice(0, 10);
     const cards = (await Promise.all(keys.map(h => cardFromKey(h.key)))).filter(Boolean);
-    const scored = await Promise.all(cards.map(async c => ({ c, m: await compareCard(region, c.image) })));
+    // Für jede Karte zählt die Ansicht, in der sie am besten passt
+    const scored = await Promise.all(cards.map(async c => {
+      let m = null;
+      for (const region of regions) { const v = await compareCard(region, c.image); if (v && (!m || v.blocks > m.blocks)) m = v; }
+      return { c, m };
+    }));
     if (closed) return;
     // Dasselbe Motiv gibt es oft in mehreren Sprachen: Bei fast gleichem Wert gewinnt Deutsch, dann Englisch.
     const rankOf = s => s.m.blocks + s.m.whole * .2 + ({ de: .08, en: .04 }[String(s.c.id).split(':')[0]] || 0);
     const good = scored.filter(s => s.m && s.m.blocks >= MATCH_SURE).sort((a, b) => rankOf(b) - rankOf(a));
     // Auch eine Karte, die wegen eines Fingers nicht sicher passt, soll den Grund erfahren.
     const likely = good[0] || scored.filter(s => s.m && s.m.blocks >= COVER_HINT).sort((a, b) => rankOf(b) - rankOf(a))[0];
-    if (likely && likely.m.covered.length) { resume(); showError(coveredText(likely.m.covered)); return; }
+    if (likely && likely.m.covered.length) {
+      if (++coverStrike < 2) { resume('Karte wird geprüft …'); return; }
+      coverStrike = 0;
+      resume(); showError(coveredText(likely.m.covered)); return;
+    }
+    coverStrike = 0;
     if (!good.length) { resume('Karte wird gesucht …'); return; }
     showHit(good.map(s => s.c), blob);
   }
@@ -233,7 +276,7 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
       if (motion > (night.on ? 24 : 9)) { hint.textContent = 'Halte die Karte still'; lastKey = ''; return; }
       if (game !== 'pokemon') { hint.textContent = 'Halte still und tippe auf den Auslöser'; return; }
       hint.textContent = 'Karte wird erkannt …';
-      const hits = await visualSearch(src, r.x, r.y, r.w, r.h, 8);
+      const hits = mergeHits(await Promise.all(views({ src, r }).map(v => visualSearch(v.src, v.r.x, v.r.y, v.r.w, v.r.h, 8))));
       if (paused || closed) return;
       const best = hits[0];
       if (best && best.d <= VISUAL_SURE) {
@@ -285,7 +328,7 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
       hint.textContent = 'Karte wird gelesen …';
       const pic = await freshPicture();
       if (closed) return;
-      const region = readRegion(pic.src, pic.r);
+      const region = readRegion(...(v => [v.src, v.r])(views(pic)[0]));
       const [blob, cut] = await Promise.all([snap(), crop()]);
       try {
         const { cards } = await identify(cut, game, t => { hint.textContent = t; });
@@ -319,6 +362,7 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onGallery }) {
       }
       const from = panel.querySelector('.hitcard img');
       onAdd(card, res.hash, from);
+      if (b.dataset.then === 'auction' && onAuction) { close(); onAuction(card); return; }
       session++; sessionValue += card.price || 0;
       countEl.hidden = false;
       countEl.textContent = `${session} ${session === 1 ? 'Karte' : 'Karten'} · +${money.format(sessionValue)}`;

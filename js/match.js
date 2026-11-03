@@ -192,8 +192,10 @@ function coverage(off, region, p) {
       const X = Math.round(SW / 2 + p.dx + x0 * cos - y0 * sin), Y = Math.round(SH / 2 + p.dy + x0 * sin + y0 * cos);
       const inside = X >= 0 && Y >= 0 && X < SW && Y < SH;
       const c = (Y * SW + X) * 4;
+      // Überstrahlte Stellen verraten nichts über die Karte: auslassen statt als Fehler zählen
+      if (inside && Math.max(region.rgb[c], region.rgb[c + 1], region.rgb[c + 2]) >= 250) continue;
       pts.push({
-        u: u - .5, v: v - .5, cell: Math.floor(y / PER) * CX + Math.floor(x / PER), inside,
+        u: u - .5, v: v - .5, cell: Math.floor(y / PER) * CX + Math.floor(x / PER), inside, X, Y,
         off: [off.rgb[at], off.rgb[at + 1], off.rgb[at + 2]],
         cam: inside ? [region.rgb[c], region.rgb[c + 1], region.rgb[c + 2]] : [0, 0, 0],
       });
@@ -201,21 +203,59 @@ function coverage(off, region, p) {
   }
   const seen = pts.filter(q => q.inside);
   if (seen.length < 50) return none;
-  const fits = [0, 1, 2].map(ch => fitLight(seen, ch));
+  const linear = [0, 1, 2].map(ch => fitLight(seen, ch));
+  // Kameras biegen die Helligkeit (Kontrast, überstrahlte Lichter). Eine Kurve je Farbkanal gleicht das aus.
+  // Der Mittelwert pro Helligkeitsstufe ist robust gegen einen Finger, solange er nicht die halbe Karte bedeckt.
+  const fits = linear.map((lin, ch) => {
+    const BINS = 12, groups = Array.from({ length: BINS }, () => []);
+    let lo = Infinity, hi = -Infinity;
+    for (const q of seen) { const v = lin(q); if (v < lo) lo = v; if (v > hi) hi = v; }
+    const span = Math.max(1, hi - lo);
+    const binOf = v => Math.min(BINS - 1, Math.max(0, Math.floor((v - lo) / span * BINS)));
+    for (const q of seen) groups[binOf(lin(q))].push(q.cam[ch]);
+    const curve = groups.map((g, i) => {
+      if (g.length < 6) return null;
+      g.sort((x, y) => x - y);
+      return g[Math.floor(g.length / 2)] - (lo + span * (i + .5) / BINS);
+    });
+    // Lücken mit Nachbarn füllen
+    for (let i = 0; i < BINS; i++) if (curve[i] == null) curve[i] = curve.slice(0, i).reverse().find(v => v != null) ?? curve.slice(i).find(v => v != null) ?? 0;
+    return q => {
+      const v = lin(q), f = (v - lo) / span * BINS - .5;
+      const i = Math.max(0, Math.min(BINS - 2, Math.floor(f))), t = Math.max(0, Math.min(1, f - i));
+      return v + curve[i] * (1 - t) + curve[i + 1] * t;
+    };
+  });
   // Der Kontrast im Bild ist der Maßstab, damit dunkle und helle Aufnahmen gleich zählen.
   let sum = 0, sq = 0;
   for (const q of seen) { const v = fits[1](q); sum += v; sq += v * v; }
   const sd = Math.sqrt(Math.max(1, sq / seen.length - (sum / seen.length) ** 2));
-  const signed = [0, 1, 2].map(() => new Float32Array(CX * CY)), count = new Float32Array(CX * CY), missing = new Float32Array(CX * CY);
-  for (const q of pts) {
-    count[q.cell]++;
-    if (!q.inside) { missing[q.cell]++; continue; }
-    for (let ch = 0; ch < 3; ch++) signed[ch][q.cell] += q.cam[ch] - fits[ch](q);
-  }
-  const cells = Array.from(count, (n, i) => {
-    if (!n) return 0;
-    if (missing[i] > n / 2) return 9; // außerhalb des Bildes
-    return Math.max(Math.abs(signed[0][i]), Math.abs(signed[1][i]), Math.abs(signed[2][i])) / n / sd; // stärkster Farbkanal, ein Finger auf gelbem Rand fällt nur im Blau auf
+  // Jedes Feld darf ein paar Bildpunkte verrutscht sein (schräg gehaltene Karte, ungenaue Kanten).
+  // Ein Finger bleibt auch verschoben auffällig, eine leicht versetzte Schrift nicht.
+  const SHIFTS = [[0, 0], [-2, 0], [2, 0], [0, -2], [0, 2], [-2, -2], [2, 2], [-2, 2], [2, -2]];
+  const byCell = Array.from({ length: CX * CY }, () => []);
+  for (const q of pts) byCell[q.cell].push(q);
+  const predicted = new Map(seen.map(q => [q, [fits[0](q), fits[1](q), fits[2](q)]]));
+  const cells = byCell.map(list => {
+    if (!list.length) return 0;
+    const out = list.filter(q => !q.inside).length;
+    if (out > list.length / 2) return 9; // außerhalb des Bildes
+    let best = Infinity;
+    for (const [sx, sy] of SHIFTS) {
+      const sum = [0, 0, 0];
+      let n = 0;
+      for (const q of list) {
+        if (!q.inside) continue;
+        const X = Math.min(SW - 1, Math.max(0, q.X + sx)), Y = Math.min(SH - 1, Math.max(0, q.Y + sy)), c = (Y * SW + X) * 4;
+        const pr = predicted.get(q);
+        for (let ch = 0; ch < 3; ch++) sum[ch] += region.rgb[c + ch] - pr[ch];
+        n++;
+      }
+      // stärkster Farbkanal: ein Finger auf gelbem Rand fällt nur im Blau auf
+      const e = n ? Math.max(Math.abs(sum[0]), Math.abs(sum[1]), Math.abs(sum[2])) / n / sd : 0;
+      if (e < best) best = e;
+    }
+    return best;
   });
   const typical = [...cells].sort((x, y) => x - y)[Math.floor(cells.length / 2)];
   const limit = Math.max(COVER_LIMIT, typical * 3);

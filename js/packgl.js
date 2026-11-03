@@ -152,7 +152,14 @@ void main(){
   }else{
     col=texture(uBack,vec2(1.-vUv.x,vUv.y)).rgb;
     vec3 H=normalize(normalize(uLight)+V);
-    col+=pow(max(dot(N,H),0.),30.)*.22;
+    vec3 R=reflect(-V,N);
+    float goldMask=smoothstep(.12,.3,col.r-col.b)*smoothstep(.35,.65,col.r);
+    float sweep=pow(.5+.5*sin(R.x*9.+R.y*6.+uTime*.7+vUv.y*4.),7.);
+    col+=goldMask*(sweep*.9+pow(max(dot(N,H),0.),24.)*.6)*vec3(1.,.86,.5);
+    col+=pow(max(dot(N,H),0.),40.)*.12;
+    vec2 cell=floor(vUv*vec2(46.,64.));
+    float tw=h21(cell+3.);
+    col+=goldMask*step(.93,tw)*pow(.5+.5*sin(uTime*4.+tw*50.+R.x*20.),10.)*1.2;
     col+=vec3(1.,.8,.3)*uAura*(.18+.2*sin(uTime*5.))*smoothstep(.0,-.09,d)*smoothstep(-.09,-.0,d)*5.;
   }
   o=vec4(col*uDim,cov);
@@ -167,6 +174,7 @@ precision highp float;
 in vec2 vN;
 uniform float uTime,uAspect,uRays,uGlow,uRing,uRingA,uFlash;
 uniform vec2 uPos;
+uniform vec4 uShadow;
 uniform vec3 uTint,uRayCol;
 out vec4 o;
 ${NOISE}
@@ -182,6 +190,9 @@ void main(){
   col+=uRayCol*uGlow*exp(-l*l*3.2);
   float ring=exp(-pow((l-uRing)*11.,2.))*uRingA;
   col+=uRayCol*ring;
+  vec2 sp=vec2(uShadow.x*uAspect,uShadow.y);
+  vec2 sd=(p-sp)/vec2(uShadow.z*uAspect,uShadow.z*.22);
+  col*=1.-uShadow.w*exp(-dot(sd,sd)*2.2);
   col+=vec3(uFlash);
   col*=1.-.32*dot(vN,vN)*.5;
   col+=(h21(vN*311.+uTime)-.5)*.012;
@@ -352,34 +363,96 @@ function drawBack(def) {
   return c;
 }
 
+// Rückseite der verdeckten Karten: Nachtblau mit Goldprägung, Guilloche-Muster wie auf Geldscheinen und Wappen in der Mitte.
 function drawCardBack() {
-  const W = 430, H = 602;
+  const W = 512, H = 717;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const x = c.getContext('2d');
-  x.fillStyle = '#0c2733'; x.fillRect(0, 0, W, H);
-  const g = x.createRadialGradient(W / 2, H / 2, 10, W / 2, H / 2, H * .7);
-  g.addColorStop(0, '#1b8f8a'); g.addColorStop(1, '#08202b');
-  x.fillStyle = g; x.fillRect(18, 18, W - 36, H - 36);
-  x.strokeStyle = 'rgba(214,190,120,.8)'; x.lineWidth = 5;
-  x.strokeRect(30, 30, W - 60, H - 60);
-  x.strokeStyle = 'rgba(255,255,255,.09)'; x.lineWidth = 2;
-  for (let i = -H; i < H * 2; i += 26) {
-    x.beginPath(); x.moveTo(30, i); x.lineTo(W - 30, i + (W - 60)); x.stroke();
-    x.beginPath(); x.moveTo(W - 30, i); x.lineTo(30, i + (W - 60)); x.stroke();
+  const gold = (y0, y1) => {
+    const gr = x.createLinearGradient(0, y0, 0, y1);
+    gr.addColorStop(0, '#fff4c2'); gr.addColorStop(.35, '#f0c45a'); gr.addColorStop(.6, '#b07a22'); gr.addColorStop(1, '#f6d77c');
+    return gr;
+  };
+  // Grund
+  const base = x.createRadialGradient(W / 2, H / 2, 20, W / 2, H / 2, H * .7);
+  base.addColorStop(0, '#16385a'); base.addColorStop(.55, '#0b1d33'); base.addColorStop(1, '#050c17');
+  x.fillStyle = base; x.fillRect(0, 0, W, H);
+  // Rand
+  x.fillStyle = gold(0, H);
+  x.beginPath(); x.roundRect(10, 10, W - 20, H - 20, 26); x.fill();
+  x.fillStyle = base;
+  x.beginPath(); x.roundRect(22, 22, W - 44, H - 44, 18); x.fill();
+  x.strokeStyle = 'rgba(240,196,90,.55)'; x.lineWidth = 2;
+  x.beginPath(); x.roundRect(34, 34, W - 68, H - 68, 12); x.stroke();
+  // Guilloche: viele feine Wellenkreise
+  x.save();
+  x.beginPath(); x.roundRect(36, 36, W - 72, H - 72, 10); x.clip();
+  x.translate(W / 2, H / 2);
+  for (let k = 0; k < 26; k++) {
+    x.strokeStyle = k % 2 ? 'rgba(240,196,90,.16)' : 'rgba(120,200,220,.12)';
+    x.lineWidth = 1.2;
+    x.beginPath();
+    const r0 = 70 + k * 11, amp = 9 + (k % 5) * 3, lobes = 12 + (k % 3) * 6;
+    for (let i = 0; i <= 720; i++) {
+      const t = i / 720 * Math.PI * 2;
+      const r = r0 + amp * Math.sin(lobes * t + k * .7);
+      const px = Math.cos(t) * r * .82, py = Math.sin(t) * r * 1.12;
+      if (i) x.lineTo(px, py); else x.moveTo(px, py);
+    }
+    x.stroke();
   }
+  // Strahlen hinter dem Wappen
+  for (let i = 0; i < 32; i++) {
+    x.rotate(Math.PI * 2 / 32);
+    x.fillStyle = i % 2 ? 'rgba(240,196,90,.22)' : 'rgba(240,196,90,.07)';
+    x.beginPath(); x.moveTo(0, 0); x.lineTo(-9, -170); x.lineTo(9, -170); x.fill();
+  }
+  x.restore();
+  // Eckverzierungen
+  const corner = (cx, cy, sx, sy) => {
+    x.save(); x.translate(cx, cy); x.scale(sx, sy);
+    x.strokeStyle = gold(-30, 30); x.lineWidth = 3;
+    x.beginPath(); x.moveTo(0, 46); x.quadraticCurveTo(0, 0, 46, 0); x.stroke();
+    x.fillStyle = gold(-10, 10);
+    x.beginPath(); x.moveTo(16, 6); x.lineTo(22, 16); x.lineTo(16, 26); x.lineTo(10, 16); x.closePath(); x.fill();
+    x.restore();
+  };
+  corner(46, 46, 1, 1); corner(W - 46, 46, -1, 1); corner(46, H - 46, 1, -1); corner(W - 46, H - 46, -1, -1);
+  // Wappen
   x.save();
   x.translate(W / 2, H / 2);
-  x.rotate(Math.PI / 4);
-  x.fillStyle = '#f2d98a';
-  x.fillRect(-70, -70, 140, 140);
-  x.fillStyle = '#0c2733';
-  x.fillRect(-60, -60, 120, 120);
-  x.restore();
-  x.fillStyle = '#f2d98a';
-  x.font = '900 104px Lato, system-ui, sans-serif';
+  x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 22;
+  x.fillStyle = gold(-118, 118);
+  x.beginPath(); x.arc(0, 0, 118, 0, Math.PI * 2); x.fill();
+  x.shadowBlur = 0;
+  const inner = x.createRadialGradient(-20, -30, 10, 0, 0, 110);
+  inner.addColorStop(0, '#1d4f78'); inner.addColorStop(1, '#081628');
+  x.fillStyle = inner;
+  x.beginPath(); x.arc(0, 0, 104, 0, Math.PI * 2); x.fill();
+  x.strokeStyle = 'rgba(240,196,90,.7)'; x.lineWidth = 2;
+  x.beginPath(); x.arc(0, 0, 94, 0, Math.PI * 2); x.stroke();
+  // Sterne im Ring
+  x.fillStyle = gold(-100, 100);
+  for (let i = 0; i < 12; i++) {
+    const t = i / 12 * Math.PI * 2 - Math.PI / 2;
+    x.save(); x.translate(Math.cos(t) * 82, Math.sin(t) * 82); x.rotate(t);
+    x.beginPath();
+    for (let k = 0; k < 10; k++) { const r = k % 2 ? 2.4 : 6; const a = k / 10 * Math.PI * 2; x.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+    x.fill(); x.restore();
+  }
+  x.font = '900 120px Lato, system-ui, sans-serif';
   x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText('K', W / 2, H / 2 + 4);
+  x.lineWidth = 7; x.strokeStyle = '#3d2608';
+  x.strokeText('K', 0, 6);
+  x.fillStyle = gold(-55, 60);
+  x.fillText('K', 0, 6);
+  x.restore();
+  x.fillStyle = gold(H - 120, H - 80);
+  x.font = '800 22px Lato, system-ui, sans-serif';
+  x.textAlign = 'center';
+  x.fillText('K A R T E N W E R T', W / 2, H - 92);
+  x.fillText('★  ★  ★', W / 2, 104);
   return c;
 }
 
@@ -504,7 +577,7 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
     pack: { show: true, x: 0, y: -4, z: 0, rx: 0, ry: 0, rz: 0, sx: 1, sy: 1, bulge: .075, open: 0, tear: 0, dir: 1, sway: 0 },
     strip: { free: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, rx: 0, ry: 0, rz: 0, wx: 0, wy: 0, wz: 0 },
     group: { show: true, x: 0, y: .016, z: 0, s: 1, fan: 0, spread: 0, rx: 0 },
-    attached: true, top: 0, dragX: 0, dragY: 0, dragging: false, showCards: true, focusTilt: 0,
+    attached: true, top: 0, dragX: 0, dragY: 0, dragging: false, showCards: false, focusTilt: 0,
     cards: cards.map((c, i) => ({
       i, data: c, tex: texCards[i], hit: isHit(c), reveal: isHit(c) || i === cards.length - 1,
       ry: isHit(c) || i === cards.length - 1 ? Math.PI : 0,
@@ -648,6 +721,15 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
       top.rx += (tiltX - top.rx) * k;
       top.bend = top.x * .22;
     }
+    if (scene.tease) {
+      scene.teaseT = (scene.teaseT || 0) + dt;
+      if (scene.teaseT > 1.9) {
+        scene.teaseT = 0;
+        for (let i = 0; i < 9; i++) spawn({ x: p.x + (Math.random() - .5) * PW * .9, y: p.y + TEAR_Y + .02, z: .06, vx: (Math.random() - .5) * .4, vy: .25 + Math.random() * .5, life: .7 + Math.random() * .6, size: 14 + Math.random() * 20, drag: 1.2, col: [1, .85, .4] });
+        tw(360, (t, raw) => { p.rz = Math.sin(raw * Math.PI * 6) * (1 - raw) * .035; }, k => k);
+        sfx.rustle(.5);
+      }
+    }
     // Staub schwebt immer ein wenig
     if (Math.random() < dt * 9) {
       spawn({ x: (Math.random() - .5) * vis.w, y: -vis.h * .55, z: -1 + Math.random() * 1.2, vx: (Math.random() - .5) * .08, vy: .16 + Math.random() * .22, life: 5 + Math.random() * 4, size: 7 + Math.random() * 16, drag: 0, col: [.55 + tint[0] * .3, .55 + tint[1] * .3, .55 + tint[2] * .3], ambient: true });
@@ -687,6 +769,9 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
     gl.uniform1f(bgP.u('uRingA'), scene.ringA);
     gl.uniform1f(bgP.u('uFlash'), scene.flash);
     gl.uniform2f(bgP.u('uPos'), focus[0], focus[1]);
+    const shadowAt = scene.deal ? project(0, scene.group.y - CH * scene.group.s * .5 - .1, -.3) : project(scene.pack.x, scene.pack.y - PH * .5 - .1, -.3);
+    const shadowW = scene.deal ? CW * scene.group.s / vis.w * 1.1 : PW / vis.w * 1.2;
+    gl.uniform4f(bgP.u('uShadow'), shadowAt[0], shadowAt[1], shadowW, scene.pack.show && scene.pack.y > -1 ? .5 : scene.deal ? .35 : 0);
     gl.uniform3fv(bgP.u('uTint'), tint);
     gl.uniform3fv(bgP.u('uRayCol'), scene.rayCol);
     gl.bindVertexArray(null);
@@ -801,10 +886,14 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
   }
   raf = requestAnimationFrame(frame);
 
+  let lastRustle = 0;
   function pointerLook(e) {
     const r = box.getBoundingClientRect();
-    scene.px = (e.clientX - r.left) / r.width * 2 - 1;
-    scene.py = (e.clientY - r.top) / r.height * 2 - 1;
+    const nx = (e.clientX - r.left) / r.width * 2 - 1, ny = (e.clientY - r.top) / r.height * 2 - 1;
+    const moved = Math.hypot(nx - scene.px, ny - scene.py);
+    scene.px = nx; scene.py = ny;
+    const now = performance.now();
+    if (scene.pack.sway > .5 && moved > .05 && now - lastRustle > 110) { lastRustle = now; sfx.rustle(Math.min(1, moved * 4)); }
   }
   box.addEventListener('pointermove', pointerLook);
 
@@ -849,6 +938,7 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
     tw(500, t => { p.sway = t; }, inOut);
     hint.hidden = false;
     scene.hint = 1;
+    scene.tease = scene.cards.some(c => c.hit);
   }
 
   function waitForTear() {
@@ -864,7 +954,8 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
         const before = p.tear;
         p.tear += (target - p.tear) * .34;
         const speed = Math.abs(p.tear - before);
-        sfx.tearing(Math.min(1, speed * 16));
+        scene.zoom = p.tear * camD * .05;
+        sfx.tearing(Math.min(1, speed * 16), ((p.dir > 0 ? p.tear : 1 - p.tear) - .5) * 1.4);
         scene.mouth = Math.max(scene.mouth, p.tear * .5);
         if (speed > .004) {
           const [x, y] = shredAt();
@@ -923,6 +1014,9 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
   async function ripOff() {
     const p = scene.pack, st = scene.strip;
     p.sway = 0;
+    scene.showCards = true;
+    scene.tease = false;
+    tw(600, t => { scene.zoom = lerp(scene.zoom, 0, t); }, outCubic);
     // Streifen reißt ab und fliegt weg
     Object.assign(st, {
       free: true, x: p.x, y: p.y + TEAR_Y, z: p.z + .02,
@@ -960,7 +1054,7 @@ export async function playPackGL({ def, cards, paid, isHit, summary, onClose }) 
     scene.shake = .35;
     await wait(170);
     sfx.slide();
-    await tw(560, t => { g.y = lerp(y0 + .27, y0 + .62, t); p.y = lerp(-.1, -.42, t); scene.rays = lerp(.5, .85, t); scene.glow = lerp(.38, .5, t); }, inOut);
+    await tw(560, t => { cardsOnly.forEach((c, i) => { c.y = -Math.sin(t * Math.PI) * .07 * i / cardsOnly.length; }); g.y = lerp(y0 + .27, y0 + .62, t); p.y = lerp(-.1, -.42, t); scene.rays = lerp(.5, .85, t); scene.glow = lerp(.38, .5, t); }, inOut);
     scene.shake = .25;
     await wait(200);
     // Leeres Pack fällt weg, Karten ziehen nach vorn
