@@ -54,6 +54,9 @@ function pokemonPrice(card) {
   return fallback();
 }
 
+let extraPromise = null;
+const extraImages = () => (extraPromise = extraPromise || fetch('index/extra-images.json').then(r => (r.ok ? r.json() : {})).catch(() => ({})));
+
 async function pokemonDetail(lang, id) {
   const c = await getJson(`https://api.tcgdex.net/v2/${lang}/cards/${encodeURIComponent(id)}`);
   if (!c) return null;
@@ -63,9 +66,11 @@ async function pokemonDetail(lang, id) {
     const en = await getJson(`https://api.tcgdex.net/v2/en/cards/${encodeURIComponent(id)}`).catch(() => null);
     if (en && en.image) c.image = en.image;
   }
+  // Hat TCGdex gar kein Bild, kommt es aus der zweiten Quelle (pokemontcg.io), soweit dort vorhanden.
+  const extra = c.image ? '' : (await extraImages())[c.id] || '';
   return {
     game: 'pokemon', id: lang + ':' + c.id, name: c.name, number: String(c.localId || ''),
-    set: (c.set && c.set.name) || '', image: c.image ? c.image + '/high.webp' : '', price, hist,
+    set: (c.set && c.set.name) || '', image: c.image ? c.image + '/high.webp' : extra, price, hist,
     setId: (c.set && c.set.id) || '', rawId: c.id, dexId: c.dexId || [], rarity: c.rarity || '',
   };
 }

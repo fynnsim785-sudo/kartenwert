@@ -240,9 +240,17 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onAuction, onG
     const blob = await snap();
     // Der Fingerabdruck schlägt nur vor. Gezeigt wird, was dem Originalbild wirklich gleicht.
     const near = hits.filter(h => h.d <= hits[0].d + 14).slice(0, 20);
-    const seenKey = new Set();
-    const keys = near.filter(h => { const k = h.key.replace(/^[a-z]{2}:/, ''); return !seenKey.has(k) && seenKey.add(k); }).slice(0, 10);
-    const cards = (await Promise.all(keys.map(h => cardFromKey(h.key)))).filter(Boolean);
+    // Gleiche Karte in mehreren Sprachen bleibt zusammen. Jede Sprachfassung wird verglichen, denn der Name steht
+    // auf Deutsch anders da als auf Englisch und sähe sonst wie verdeckt aus.
+    const groups = new Map();
+    for (const h of near) {
+      const raw = h.key.replace(/^[a-z]{2}:/, '');
+      if (!groups.has(raw)) { if (groups.size >= 10) continue; groups.set(raw, new Set()); }
+      groups.get(raw).add(h.key);
+    }
+    const loaded = await Promise.all([...groups.values()].map(keys => Promise.all([cardFromKey([...keys][0]), ...[...keys].map(k => getCard('pokemon', k).catch(() => null))])));
+    const cards = [];
+    for (const list of loaded) for (const c of list) if (c && !cards.some(k => k.id === c.id)) cards.push(c);
     // Für jede Karte zählt die Ansicht, in der sie am besten passt
     const scored = await Promise.all(cards.map(async c => {
       let m = null;
@@ -250,11 +258,19 @@ export async function openScanner({ game, hashes, hasCard, onAdd, onAuction, onG
       return { c, m };
     }));
     if (closed) return;
-    // Dasselbe Motiv gibt es oft in mehreren Sprachen: Bei fast gleichem Wert gewinnt Deutsch, dann Englisch.
-    const rankOf = s => s.m.blocks + s.m.whole * .2 + ({ de: .08, en: .04 }[String(s.c.id).split(':')[0]] || 0);
-    const good = scored.filter(s => s.m && s.m.blocks >= MATCH_SURE).sort((a, b) => rankOf(b) - rankOf(a));
+    // Pro Karte bleibt die Sprachfassung, deren Bild am besten passt. Bei gleichem Bild gewinnt Deutsch, dann Englisch.
+    const lang = s => ({ de: .02, en: .01 }[String(s.c.id).split(':')[0]] || 0);
+    const fit = s => s.m.blocks - s.m.covered.length * .1 + lang(s);
+    const best = new Map();
+    for (const s of scored) {
+      if (!s.m) continue;
+      const p = best.get(rawId(s.c));
+      if (!p || fit(s) > fit(p)) best.set(rawId(s.c), s);
+    }
+    const rankOf = s => s.m.blocks + s.m.whole * .2 + lang(s);
+    const good = [...best.values()].filter(s => s.m.blocks >= MATCH_SURE).sort((a, b) => rankOf(b) - rankOf(a));
     // Auch eine Karte, die wegen eines Fingers nicht sicher passt, soll den Grund erfahren.
-    const likely = good[0] || scored.filter(s => s.m && s.m.blocks >= COVER_HINT).sort((a, b) => rankOf(b) - rankOf(a))[0];
+    const likely = good[0] || [...best.values()].filter(s => s.m.blocks >= COVER_HINT).sort((a, b) => rankOf(b) - rankOf(a))[0];
     if (likely && likely.m.covered.length) {
       if (++coverStrike < 2) { resume('Karte wird geprüft …'); return; }
       coverStrike = 0;
