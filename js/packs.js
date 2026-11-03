@@ -54,8 +54,8 @@ export const PACKS = [
 // Motiv jedes Packs: das Bild einer bekannten Karte aus genau diesem Set.
 const ART = {
   sv08: 'en/sv/sv08/057', 'sv08.5': 'en/sv/sv08.5/028', 'sv03.5': 'en/sv/sv03.5/006', me01: 'en/me/me01/003', sv10: 'en/sv/sv10/039',
-  sv09: 'en/sv/sv09/064', sv07: 'en/sv/sv07/128', 'sv06.5': 'en/sv/sv06.5/022', sv06: 'en/sv/sv06/025', sv05: 'en/sv/sv05/051',
-  'sv04.5': 'en/sv/sv04.5/018', sv04: 'en/sv/sv04/038', sv03: 'en/sv/sv03/125', sv02: 'en/sv/sv02/043', sv01: 'en/sv/sv01/045',
+  sv09: 'en/sv/sv09/030', sv07: 'en/sv/sv07/030', 'sv06.5': 'en/sv/sv06.5/039', sv06: 'en/sv/sv06/135', sv05: 'en/sv/sv05/051',
+  'sv04.5': 'en/sv/sv04.5/018', sv04: 'en/sv/sv04/058', sv03: 'en/sv/sv03/125', sv02: 'en/sv/sv02/063', sv01: 'en/sv/sv01/045',
   'swsh12.5': 'en/swsh/swsh12.5/018', swsh11: 'en/swsh/swsh11/052', swsh9: 'en/swsh/swsh9/017', swsh7: 'en/swsh/swsh7/28',
   SV7a: 'ja/SV/SV7a/011', SV6a: 'ja/SV/SV6a/032', SV5a: 'ja/SV/SV5a/052', SV9: 'ja/SV/SV9/045', SV4a: 'ja/SV/SV4a/115',
   SV10: 'ja/SV/SV10/039', SV2a: 'ja/SV/SV2a/006', SV8a: 'ja/SV/SV8a/093',

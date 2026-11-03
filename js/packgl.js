@@ -275,13 +275,13 @@ function drawFront(def, logo, art) {
   // Motiv: Das Kartenbild ist breit, das Pack hoch. Damit das ganze Pokémon samt Gesicht zu sehen ist, steht das Bild
   // fast in voller Breite in der Mitte. Darüber und darunter füllt dasselbe Bild unscharf die Folie.
   if (art) {
-    const ax = art.width * .085, ay = art.height * .11, aw = art.width * .83, ah = art.height * .41;
+    const ax = art.width * .085, ay = art.height * .145, aw = art.width * .83, ah = art.height * .34;
     x.save();
     x.filter = 'blur(18px) saturate(1.25) brightness(.9)';
     const bw = ah * W / H;
     x.drawImage(art, ax + (aw - bw) / 2, ay, bw, ah, -40, -40, W + 80, H + 80);
     x.restore();
-    const sw = aw * .82, sh = ah;
+    const sw = aw, sh = ah; // ganzes Kartenbild, damit kein Gesicht abgeschnitten wird
     const dh = W * sh / sw, top = H * .42 - dh / 2;
     const pic = document.createElement('canvas');
     pic.width = W; pic.height = Math.round(dh);
@@ -289,7 +289,7 @@ function drawFront(def, logo, art) {
     px.drawImage(art, ax + (aw - sw) / 2, ay, sw, sh, 0, 0, W, pic.height);
     px.globalCompositeOperation = 'destination-in';
     const fade = px.createLinearGradient(0, 0, 0, pic.height);
-    fade.addColorStop(0, 'rgba(0,0,0,0)'); fade.addColorStop(.1, '#000'); fade.addColorStop(.9, '#000'); fade.addColorStop(1, 'rgba(0,0,0,0)');
+    fade.addColorStop(0, 'rgba(0,0,0,0)'); fade.addColorStop(.22, '#000'); fade.addColorStop(.88, '#000'); fade.addColorStop(1, 'rgba(0,0,0,0)');
     px.fillStyle = fade; px.fillRect(0, 0, W, pic.height);
     x.drawImage(pic, 0, top);
   } else {
